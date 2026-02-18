@@ -1,0 +1,96 @@
+[project]
+name = "cqedtoolbox"
+version = "0.1.0"
+description = "Tool implementations used in pfafflab based on the rest of the tools for experiments ecosystem"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+authors = [
+    {name = "toolsforexperiments", email = "your-email@example.com"},
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Physics",
+]
+dependencies = [
+    "Pyro4>=4.80",
+    "labcore",
+    "instrumentserver",
+    "qick",
+    "qm-qua",
+    "py-thorlabs-tsp",
+    "numpy",
+    "qcodes",
+    "matplotlib",
+    "scipy",
+    "ipython",
+    "ipywidgets",
+]
+
+[project.scripts]
+pyro-ns = "cqedtoolbox.scripts.pyro_nameserver:run_pyro_nameserver"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=4.1.0",
+    "ruff>=0.6.0",
+    "mypy>=1.11.0",
+    "pre-commit>=3.5.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/toolsforexperiments/CQEDToolbox"
+Repository = "https://github.com/toolsforexperiments/CQEDToolbox"
+Issues = "https://github.com/toolsforexperiments/CQEDToolbox/issues"
+
+
+[build-system]
+requires = [
+    "setuptools >= 48",
+    "wheel >= 0.29.0",
+    "versioningit >= 1.1.0"
+]
+build-backend = 'setuptools.build_meta'
+
+[tool.uv]
+# This is needed to stop uv from trying to install some pynq dependencies that are not relevant.
+environments = [
+    "sys_platform == 'darwin'",
+    "sys_platform == 'linux' and platform_machine == 'x86_64'",
+]
+
+[tool.uv.sources]
+labcore = { path = "../labcore", editable = true }
+instrumentserver = { path = "../instrumentserver", editable = true }
+qick = { path = "../qick", editable = true }
+
+[tool.mypy]
+strict_optional = true
+show_column_numbers = true
+warn_unused_ignores = true
+warn_unused_configs = true
+warn_redundant_casts = true
+no_implicit_optional = true
+disallow_untyped_defs = true
+show_error_codes = true
+enable_error_code = "ignore-without-code"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+log_cli = true
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+include = ["cqedtoolbox*"]
+exclude = ["site*", "docs*", "test*"]
+
+[tool.setuptools.package-data]
+cqedtoolbox = ["py.typed"]
