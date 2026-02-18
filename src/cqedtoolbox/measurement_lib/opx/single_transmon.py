@@ -25,7 +25,7 @@ from qm.qua import (
 )
 
 from labcore.measurement import independent
-from labcore.instruments.opx.sweep import (
+from cqedtoolbox.instruments.opx.sweep import (
     RecordOPXdata,
     ComplexOPXData,
     TimedOPXData,
@@ -33,7 +33,7 @@ from labcore.instruments.opx.sweep import (
 
 # FIXME: This is temporary while testing the new labcore update
 try:
-    from labcore.instruments.opx.sweep import RecordPrecompiledOPXdata
+    from cqedtoolbox.instruments.opx.sweep import RecordPrecompiledOPXdata
 except:
     pass
 

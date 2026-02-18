@@ -23,6 +23,7 @@ dependencies = [
     "instrumentserver",
     "qick",
     "qm-qua",
+    "qualang-tools",
     "py-thorlabs-tsp",
     "numpy",
     "qcodes",
@@ -30,6 +31,8 @@ dependencies = [
     "scipy",
     "ipython",
     "ipywidgets",
+    "xarray",
+    "scikit-learn",
 ]
 
 [project.scripts]
@@ -59,11 +62,15 @@ requires = [
 build-backend = 'setuptools.build_meta'
 
 [tool.uv]
-# This is needed to stop uv from trying to install some pynq dependencies that are not relevant.
+# Restricts resolution to non-ARM platforms (pynq/qick ARM deps not needed on dev machines).
+# qm-qua requires betterproto pre-releases; qualang-tools pins pandas<2.0 which
+# doesn't support Python 3.12+, so we force override both.
 environments = [
     "sys_platform == 'darwin'",
     "sys_platform == 'linux' and platform_machine == 'x86_64'",
 ]
+prerelease = "if-necessary-or-explicit"
+override-dependencies = ["pandas>=2.0"]
 
 [tool.uv.sources]
 labcore = { path = "../labcore", editable = true }
