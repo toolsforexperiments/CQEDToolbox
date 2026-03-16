@@ -1120,6 +1120,12 @@ requires-dist = [
     { name = "scipy" },
 ]
 
+[package.metadata.requires-dev]
+dev = [
+    { name = "pytest", specifier = ">=9.0.2" },
+    { name = "pytest-qt", specifier = ">=4.5.0" },
+]
+
 [[package]]
 name = "ipykernel"
 version = "7.2.0"
@@ -1577,33 +1583,43 @@ requires-dist = [
     { name = "bokeh" },
     { name = "gitpython" },
     { name = "h5py" },
-    { name = "h5py", marker = "extra == 'docs'" },
     { name = "holoviews" },
     { name = "hvplot" },
-    { name = "ipykernel", marker = "extra == 'docs'" },
     { name = "jupyter-bokeh" },
     { name = "jupyterlab" },
-    { name = "linkify-it-py", marker = "extra == 'docs'" },
     { name = "lmfit" },
     { name = "matplotlib" },
-    { name = "myst-nb", marker = "extra == 'docs'" },
-    { name = "myst-parser", marker = "extra == 'docs'" },
     { name = "nest-asyncio" },
     { name = "numpy" },
     { name = "pandas" },
-    { name = "pandoc", marker = "extra == 'docs'" },
     { name = "panel" },
     { name = "param" },
     { name = "pillow" },
-    { name = "pydata-sphinx-theme", marker = "extra == 'docs'" },
     { name = "qcodes" },
     { name = "ruamel-yaml" },
     { name = "seaborn" },
-    { name = "sphinx", marker = "extra == 'docs'" },
     { name = "watchdog" },
     { name = "xarray" },
 ]
-provides-extras = ["docs"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "mypy" },
+    { name = "pytest" },
+    { name = "pytest-cov" },
+    { name = "ruff" },
+    { name = "types-markdown", specifier = ">=3.10.2.20260211" },
+]
+docs = [
+    { name = "h5py" },
+    { name = "ipykernel" },
+    { name = "linkify-it-py" },
+    { name = "myst-nb" },
+    { name = "myst-parser" },
+    { name = "pandoc" },
+    { name = "pydata-sphinx-theme" },
+    { name = "sphinx" },
+]
 
 [[package]]
 name = "lark"
