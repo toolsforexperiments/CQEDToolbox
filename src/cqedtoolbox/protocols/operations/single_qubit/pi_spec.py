@@ -14,7 +14,7 @@ from labcore.measurement.record import record_as
 from labcore.data.datadict_storage import datadict_from_hdf5
 
 from labcore.protocols.base import ProtocolOperation, OperationStatus, serialize_fit_params, ParamImprovement
-from qcui_measurement.protocols.parameters import (
+from cqedtoolbox.protocols.parameters import (
     Repetition,
     PiSpecSteps,
     StartQubitFrequency,
@@ -63,7 +63,7 @@ class PiSpectroscopy(ProtocolOperation):
         self.snr_mag = None
 
     _SIM_CENTER = 0.0
-    _SIM_SIGMA = 5.0
+    _SIM_SIGMA = 3e6  # 3 MHz
     _SIM_AMP = 0.5
     _SIM_NOISE_AMP = 0.02
 
@@ -71,9 +71,12 @@ class PiSpectroscopy(ProtocolOperation):
         logger.info("Starting dummy pi spectroscopy measurement")
         frequencies = np.linspace(self.start_freq(), self.end_freq(), int(self.steps()))
         center = (self.start_freq() + self.end_freq()) / 2 + self._SIM_CENTER
-        signal = (self._SIM_AMP * np.exp(-0.5 * ((frequencies - center) / self._SIM_SIGMA) ** 2)
-                  + self._SIM_NOISE_AMP * (np.random.randn(len(frequencies)) + 1j * np.random.randn(len(frequencies))))
-        sweep = sweep_parameter("frequencies", frequencies, record_as(lambda f: signal, "signal"))
+
+        def generate(frequencies):
+            return (self._SIM_AMP * np.exp(-0.5 * ((frequencies - center) / self._SIM_SIGMA) ** 2)
+                    + self._SIM_NOISE_AMP * (np.random.randn() + 1j * np.random.randn()))
+
+        sweep = sweep_parameter("frequencies", frequencies, record_as(generate, "signal"))
         loc, _ = run_and_save_sweep(sweep, "data", self.name)
         logger.info("Dummy measurement complete")
         return loc

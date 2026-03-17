@@ -18,11 +18,11 @@ from labcore.measurement.storage import run_and_save_sweep
 from labcore.measurement.record import record_as, independent, dependent
 
 from labcore.protocols.base import ProtocolOperation, OperationStatus
-from qcui_measurement.protocols.parameters import (
+from cqedtoolbox.protocols.parameters import (
     Repetition, ResonatorSpecSteps, StartReadoutFrequency, EndReadoutFrequency,
     StartFlux, EndFlux, FluxSteps, ZeroFluxCurrent, ECParam, ELParam, EJParam, CouplingG, ResonatorFr,
 )
-from qcui_measurement.protocols.operations.res_spec import UnwindAndFitRet
+from cqedtoolbox.protocols.operations.single_qubit.res_spec import UnwindAndFitRet
 from cqedtoolbox.fitfuncs.resonators import moving_average, HangerResponseBruno
 
 logger = logging.getLogger(__name__)

@@ -13,7 +13,7 @@ from labcore.measurement.record import record_as
 from labcore.data.datadict_storage import datadict_from_hdf5
 
 from labcore.protocols.base import ProtocolOperation, OperationStatus
-from qcui_measurement.protocols.parameters import (
+from cqedtoolbox.protocols.parameters import (
     Repetition,
     QubitGain,
     ReadoutGain,

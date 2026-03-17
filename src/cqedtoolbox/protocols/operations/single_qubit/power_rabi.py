@@ -14,7 +14,7 @@ from labcore.measurement import sweep_parameter, record_as
 from labcore.data.datadict_storage import datadict_from_hdf5
 
 from labcore.protocols.base import ProtocolOperation, OperationStatus, serialize_fit_params, ParamImprovement
-from qcui_measurement.protocols.parameters import (
+from cqedtoolbox.protocols.parameters import (
     Repetition,
     StartQubitGain,
     EndQubitGain,

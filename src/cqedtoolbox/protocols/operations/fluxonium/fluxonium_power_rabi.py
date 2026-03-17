@@ -2,7 +2,7 @@ import logging
 import numpy as np
 from pathlib import Path
 import matplotlib.pyplot as plt
-from qcui_analysis.fitfuncs.resonators import HangerResponseBruno
+from cqedtoolbox.fitfuncs.resonators import HangerResponseBruno
 from scipy.optimize import curve_fit
 from scipy.signal import find_peaks
 from sklearn.cluster import KMeans
@@ -15,9 +15,9 @@ from labcore.measurement.sweep import sweep_parameter
 from labcore.measurement.storage import run_and_save_sweep
 from labcore.measurement.record import record_as, independent, dependent
 
-from qcui_measurement.protocols.base import ProtocolOperation, OperationStatus
-from qcui_measurement.protocols.operations.res_spec_vs_flux import _fluxonium_basis, _readout_frequencies
-from qcui_measurement.protocols.parameters import (
+from labcore.protocols.base import ProtocolOperation, OperationStatus
+from cqedtoolbox.protocols.operations.fluxonium.res_spec_vs_flux import _fluxonium_basis, _readout_frequencies
+from cqedtoolbox.protocols.parameters import (
     Repetition, StartFlux, EndFlux, FluxSteps, NumGainSteps, GainPulseDuration,
     QubitGain, QubitFrequency, ReadoutFrequency, ECParam, ELParam, EJParam, ZeroFluxCurrent
 )

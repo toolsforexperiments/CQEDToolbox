@@ -14,7 +14,7 @@ from labcore.measurement.record import record_as
 from labcore.data.datadict_storage import datadict_from_hdf5
 
 from labcore.protocols.base import ProtocolOperation, OperationStatus, serialize_fit_params, ParamImprovement
-from qcui_measurement.protocols.parameters import (
+from cqedtoolbox.protocols.parameters import (
     Repetition,
     T2ESteps,
     QubitGain,
@@ -74,9 +74,9 @@ class T2EOperation(ProtocolOperation):
     def _measure_dummy(self) -> Path:
         logger.info("Starting dummy T2 Echo measurement")
         delays = np.linspace(0, 5 * self._SIM_T2E, int(self.steps()))
-        signal = (self._SIM_AMP * np.exp(-delays / self._SIM_T2E) * np.exp(2j * np.pi * self._SIM_DETUNING * delays)
-                  + self._SIM_NOISE_AMP * (np.random.randn(len(delays)) + 1j * np.random.randn(len(delays))))
-        sweep = sweep_parameter("delays", delays, record_as(lambda t: signal, "signal"))
+        signal_gen = lambda delays: (self._SIM_AMP * np.exp(-delays / self._SIM_T2E) * np.exp(2j * np.pi * self._SIM_DETUNING * delays)
+                  + self._SIM_NOISE_AMP * (np.random.randn() + 1j * np.random.randn()))
+        sweep = sweep_parameter("delays", delays, record_as(signal_gen, "signal"))
         loc, _ = run_and_save_sweep(sweep, "data", self.name)
         logger.info("Dummy measurement complete")
         return loc

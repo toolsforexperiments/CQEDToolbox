@@ -14,7 +14,7 @@ from labcore.measurement import sweep_parameter
 from labcore.measurement.record import recording, dep, indep
 
 from labcore.protocols.base import ProtocolOperation, OperationStatus, serialize_fit_params, ParamImprovement
-from qcui_measurement.protocols.parameters import (
+from cqedtoolbox.protocols.parameters import (
     Repetition,
     Delay,
     StartReadoutFrequency,
@@ -22,7 +22,7 @@ from qcui_measurement.protocols.parameters import (
     ReadoutGain,
     ReadoutLength, StartReadoutGain, EndReadoutGain, ResonatorSpecSteps
 )
-from qcui_measurement.protocols.operations.res_spec import ResonatorSpectroscopy, SyntheticHangerResonatorData
+from cqedtoolbox.protocols.operations.single_qubit.res_spec import ResonatorSpectroscopy, SyntheticHangerResonatorData
 from cqedtoolbox.measurement_lib.qick.single_transmon_v2 import FreqGainSweepProgram
 
 
@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 class ResonatorSpectroscopyVsGain(ProtocolOperation):
 
     SNR_THRESHOLD = 0.001
-    MAX_FREQ_DEVIATION_THRESHOLD = 0.5e6  # MHz threshold for linearity check
+    MAX_FREQ_DEVIATION_THRESHOLD = 0.1e6  # MHz threshold for linearity check
 
     _SIM_N_GAIN_STEPS = 11
 

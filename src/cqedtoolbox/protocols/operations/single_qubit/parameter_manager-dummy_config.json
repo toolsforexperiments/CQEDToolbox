@@ -1,0 +1,130 @@
+{
+  "parameter_manager.active.qubit": {
+    "unit": "",
+    "value": "q01"
+  },
+  "parameter_manager.msmt_params.delay": {
+    "unit": "us",
+    "value": 1.0
+  },
+  "parameter_manager.q01.IF": {
+    "unit": "Hz",
+    "value": 5000009106.68956
+  },
+  "parameter_manager.q01.LO": {
+    "unit": "Hz",
+    "value": 0.0
+  },
+  "parameter_manager.q01.T1": {
+    "unit": "us",
+    "value": 19.05847321877821
+  },
+  "parameter_manager.q01.T2E": {
+    "unit": "us",
+    "value": 24.920766961424665
+  },
+  "parameter_manager.q01.T2R": {
+    "unit": "us",
+    "value": 9.847294302273214
+  },
+  "parameter_manager.q01.detuning": {
+    "unit": "MHz",
+    "value": 1151.3851404190063
+  },
+  "parameter_manager.q01.gain_steps": {
+    "unit": "",
+    "value": 100
+  },
+  "parameter_manager.q01.n_echo": {
+    "unit": "",
+    "value": 100
+  },
+  "parameter_manager.q01.pi_spec_steps": {
+    "unit": "",
+    "value": 300
+  },
+  "parameter_manager.q01.power_rabi_end": {
+    "unit": "",
+    "value": 1.0
+  },
+  "parameter_manager.q01.power_rabi_start": {
+    "unit": "",
+    "value": 0.0
+  },
+  "parameter_manager.q01.pulses.pi.amp": {
+    "unit": "",
+    "value": 0.4991246743723084
+  },
+  "parameter_manager.q01.readout.IF": {
+    "unit": "Hz",
+    "value": 7000004054.426136
+  },
+  "parameter_manager.q01.readout.LO": {
+    "unit": "Hz",
+    "value": 0.0
+  },
+  "parameter_manager.q01.res_spec_end": {
+    "unit": "Hz",
+    "value": 7012500000.0
+  },
+  "parameter_manager.q01.res_spec_start": {
+    "unit": "Hz",
+    "value": 6987500000.0
+  },
+  "parameter_manager.q01.res_spec_steps": {
+    "unit": "",
+    "value": 300
+  },
+  "parameter_manager.q01.sat_spec_end": {
+    "unit": "Hz",
+    "value": 5005000000.0
+  },
+  "parameter_manager.q01.sat_spec_start": {
+    "unit": "Hz",
+    "value": 4995000000.0
+  },
+  "parameter_manager.q01.sat_spec_steps": {
+    "unit": "",
+    "value": 100
+  },
+  "parameter_manager.q01.t1_steps": {
+    "unit": "",
+    "value": 100
+  },
+  "parameter_manager.q01.t2e_steps": {
+    "unit": "",
+    "value": 100
+  },
+  "parameter_manager.q01.t2r_steps": {
+    "unit": "",
+    "value": 100
+  },
+  "parameter_manager.qubit.end_f": {
+    "unit": "Hz",
+    "value": 5010000000.0
+  },
+  "parameter_manager.qubit.start_f": {
+    "unit": "Hz",
+    "value": 4990000000.0
+  },
+  "parameter_manager.readout.end_g": {
+    "unit": "",
+    "value": 0.9
+  },
+  "parameter_manager.readout.gain": {
+    "unit": "",
+    "value": 0.58
+  },
+  "parameter_manager.readout.length": {
+    "unit": "us",
+    "value": 1.0
+  },
+  "parameter_manager.readout.start_g": {
+    "unit": "",
+    "value": 0.1
+  },
+  "parameter_manager.reps": {
+    "unit": "",
+    "value": 100
+  }
+}

@@ -4,7 +4,7 @@ from pathlib import Path
 import numpy as np
 import matplotlib.pyplot as plt
 
-from qcui_analysis.fitfuncs.resonators import HangerResponseBruno
+from cqedtoolbox.fitfuncs.resonators import HangerResponseBruno
 
 plt.switch_backend("agg")
 
@@ -15,9 +15,9 @@ from labcore.measurement.storage import run_and_save_sweep
 from labcore.data.datadict_storage import datadict_from_hdf5
 from labcore.measurement.record import record_as, independent, dependent
 
-from qcui_measurement.protocols.base import ProtocolOperation, OperationStatus, serialize_fit_params
-from qcui_measurement.protocols.operations.res_spec_vs_flux import _readout_frequencies, _fluxonium_basis
-from qcui_measurement.protocols.parameters import (
+from labcore.protocols.base import ProtocolOperation, OperationStatus, serialize_fit_params
+from cqedtoolbox.protocols.operations.fluxonium.res_spec_vs_flux import _readout_frequencies, _fluxonium_basis
+from cqedtoolbox.protocols.parameters import (
     Repetition, StartFlux, EndFlux, FluxSteps, ResonatorSpecSteps, StartQubitFrequency, EndQubitFrequency,
     QubitFrequency, GainPulseDuration, ECParam, ELParam, EJParam, ZeroFluxCurrent, ReadoutFrequency
 )

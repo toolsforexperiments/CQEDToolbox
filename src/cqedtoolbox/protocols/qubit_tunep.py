@@ -1,12 +1,12 @@
 from pathlib import Path
 
 from labcore.protocols.base import ProtocolBase, BranchBase
-from qcui_measurement.protocols.operations import ResonatorSpectroscopy, ResonatorSpectroscopyVsGain, PiSpectroscopy, PowerRabi, ResonatorSpectroscopyAfterPi, ReadoutCalibration, SaturationSpectroscopy, T1Operation, T2EOperation, T2ROperation
+from cqedtoolbox.protocols.operations import ResonatorSpectroscopy, ResonatorSpectroscopyVsGain, PiSpectroscopy, PowerRabi, ResonatorSpectroscopyAfterPi, ReadoutCalibration, SaturationSpectroscopy, T1Operation, T2EOperation, T2ROperation
 
 
 class QubitTuneup(ProtocolBase):
 
-    def __init__(self, params, report_path: Path = Path("..")):
+    def __init__(self, params, report_path: Path = Path("operations")):
         super().__init__(report_path)
 
         self.root_branch = BranchBase("QubitTuneup")

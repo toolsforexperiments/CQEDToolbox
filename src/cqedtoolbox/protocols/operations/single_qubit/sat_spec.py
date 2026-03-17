@@ -16,7 +16,7 @@ from labcore.measurement.sweep import sweep_parameter
 from labcore.measurement.record import record_as
 
 from labcore.protocols.base import ProtocolOperation, OperationStatus, serialize_fit_params, ParamImprovement
-from qcui_measurement.protocols.parameters import (
+from cqedtoolbox.protocols.parameters import (
     Repetition,
     SaturationSpecSteps,
     StartSaturationSpecFrequency, EndSaturationSpecFrequency, QubitLO, QubitIF
