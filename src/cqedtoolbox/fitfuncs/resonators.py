@@ -102,7 +102,7 @@ class HangerResponseBruno(Fit):
     @staticmethod
     def model(coordinates: np.ndarray, A: float, f_0: float, Q_i: float, Q_e_mag: float, theta: float, phase_offset: float,
               phase_slope: float, transmission_slope: float):
-        """A (1 + alpha * (x - f_0)/f_0) (1 - Q_l/|Q_e| exp(i \theta) / (1 + 2i Q_l (x-f_0)/f_0)) exp(i(\phi_v f_0
+        r"""A (1 + alpha * (x - f_0)/f_0) (1 - Q_l/|Q_e| exp(i \theta) / (1 + 2i Q_l (x-f_0)/f_0)) exp(i(\phi_v f_0
         + phi_0))"""
 
         x = coordinates

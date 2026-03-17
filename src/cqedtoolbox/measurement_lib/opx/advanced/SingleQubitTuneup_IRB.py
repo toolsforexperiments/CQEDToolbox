@@ -6,14 +6,12 @@ from qm.qua import *
 from qualang_tools.bakery.randomized_benchmark_c1 import c1_table
 
 from labcore.measurement import independent
-from labcore.instruments.opx.sweep import (
+from cqedtoolbox.instruments.opx.sweep import (
     RecordOPXdata,
     ComplexOPXData,
 )
 
-from labcore.setup_measurements import run_measurement, getp, param_from_name
-from labcore.measurement.sweep import sweep_parameter 
-
+from cqedtoolbox.setup_measurements import run_measurement
 from cqedtoolbox.measurement_lib.opx import single_transmon
 
 single_transmon_options = single_transmon.options
@@ -321,8 +319,6 @@ def randomized_benchmarking(qubit_name, num_of_sequences, n_avg, max_circuit_dep
 
     
     return qua_measurement
-
-
 
 
 def measure_randomized_benchmarking(qubit_name='qA', num_seq = 20, inner_avg = 100, gate_index=0):

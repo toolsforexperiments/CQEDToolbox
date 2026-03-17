@@ -1,13 +1,5 @@
 #TODO: Work in progress - Michael Mollenhauer, Abdullah Irfan
 
-from labcore.analysis.mpl import plot_fit_1d, fit_and_plot_1d
-
-from cqedtoolbox.readout.qubit_readout import rotate_complex_qubit_data
-
-
-
-from qm.qua import *
-
 import numpy as np
 
 from qm.qua import (
@@ -17,18 +9,12 @@ from qm.qua import (
     fixed,
     for_,
     save,
-    measure,
-    demod,
     wait,
     stream_processing,
-    update_frequency,
     play,
     align,
     amp,
     assign,
-    Cast,
-    frame_rotation_2pi,
-    if_,
 )
 
 from labcore.measurement import independent
@@ -42,17 +28,11 @@ from cqedtoolbox.setup_measurements import run_measurement, getp, param_from_nam
 from labcore.measurement.sweep import sweep_parameter 
 from labcore.analysis.mpl import fit_and_plot_1d, plot_fit_1d
 from labcore.data.datadict_storage import load_as_xr
-from cqedtoolbox.measurement_lib.opx.single_transmon import options, measure_qubit, prepare
+from cqedtoolbox.measurement_lib.opx.single_transmon import options as single_transmon_options, measure_qubit, prepare
 from labcore.analysis.fitfuncs.generic import Cosine
 
-### adding this:
-
-
-single_transmon_options = options
 
 delta_t_RO = 20
-
-# from measurement_calibration import *
 
 @RecordOPXdata(
     independent("repetition"),
@@ -182,11 +162,6 @@ def readout_superposition(n_reps):
     return qua_measurement
 
 
-
-
-
-
-
 def sweeping_RO_params(qubit_name):
 
     RO_len = param_from_name(f"{qubit_name}.readout.short.len")
@@ -227,19 +202,16 @@ def measure_readout_ground_and_excited(qubit_name):
     data_loc, _ = run_measurement(sweep=msmt, name=f"{qubit_name}_RO_ground_and_excited")
     return data_loc
 
-
-
-
-
-if __name__ == "__main__":
-
-    qubit = getp('active.qubit')
-    # setup_single_qubit_measurement_defaults()
-
-    
-    measure_readout_ground_and_excited(qubit)
-
-    loc = sweeping_RO_params(qubit)
+# TODO: Clean this up.
+# if __name__ == "__main__":
+#
+#     qubit = getp('active.qubit')
+#     # setup_single_qubit_measurement_defaults()
+#
+#
+#     measure_readout_ground_and_excited(qubit)
+#
+#     loc = sweeping_RO_params(qubit)
 
 
 

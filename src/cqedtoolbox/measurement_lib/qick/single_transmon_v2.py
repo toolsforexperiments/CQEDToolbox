@@ -1,6 +1,6 @@
 # the main program class
 from qick.asm_v2 import AveragerProgramV2
-from labcore.instruments.qick.qick_sweep_v2 import QickBoardSweep, ComplexQICKData, PulseVariable, TimeVariable
+from cqedtoolbox.instruments.qick.qick_sweep_v2 import QickBoardSweep, ComplexQICKData, PulseVariable, TimeVariable
 from labcore.measurement import independent
 
 '''
