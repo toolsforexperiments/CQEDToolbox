@@ -1,7 +1,5 @@
 #TODO: Work in progress - Michael Mollenhauer, Abdullah Irfan
 
-from qm.qua import *
-
 import numpy as np
 
 from qm.qua import (
@@ -11,33 +9,20 @@ from qm.qua import (
     fixed,
     for_,
     save,
-    measure,
-    demod,
-    wait,
     stream_processing,
-    update_frequency,
     play,
     align,
-    amp,
-    assign,
-    Cast,
-    frame_rotation_2pi,
-    if_,
 )
 
 from labcore.measurement import independent
-from labcore.instruments.opx.sweep import (
+from cqedtoolbox.instruments.opx.sweep import (
     RecordOPXdata,
     ComplexOPXData,
-    TimedOPXData,
 )
 
-from labcore.setup_measurements import run_measurement, getp, param_from_name
-from labcore.measurement.sweep import sweep_parameter 
-from labcore.analysis.mpl import fit_and_plot_1d
-from labcore.data.datadict_storage import load_as_xr
-from labcore.analysis.fitfuncs.generic import Cosine
-from cqedtoolbox.measurement_lib.opx.single_transmon import options
+from labcore.measurement.sweep import sweep_parameter
+from cqedtoolbox.setup_measurements import run_measurement, getp, param_from_name
+from cqedtoolbox.measurement_lib.opx.single_transmon import options, prepare, measure_qubit
 
 ### adding this:
 
@@ -198,15 +183,4 @@ def measure_after_pibytwo_pulse_train_vs_amp(train_len, amp_range, amp_points):
     )
 
     return data_loc
-
-    
-
-# if __name__ == "__main__":
-
-#     qubit_name = 'qA'
-
-
-
-#     #train_len = 8
-#     #measure_after_pulse_train_vs_amp(train_len, amp_range, amp_points)
 

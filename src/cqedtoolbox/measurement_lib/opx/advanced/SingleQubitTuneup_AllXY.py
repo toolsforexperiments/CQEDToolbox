@@ -12,38 +12,26 @@ from qm.qua import (
     fixed,
     for_,
     save,
-    measure,
-    demod,
     wait,
     stream_processing,
-    update_frequency,
     play,
     align,
     amp,
     assign,
-    Cast,
     frame_rotation_2pi,
     if_,
 )
 
 from labcore.measurement import independent
-from labcore.instruments.opx.sweep import (
+from labcore.measurement.sweep import sweep_parameter
+
+from cqedtoolbox.instruments.opx.sweep import (
     RecordOPXdata,
     ComplexOPXData,
-    TimedOPXData,
 )
 
-from labcore.setup_measurements import run_measurement, getp, param_from_name
-from labcore.measurement.sweep import sweep_parameter 
-from labcore.analysis.mpl import fit_and_plot_1d
-from labcore.analysis.fitfuncs.generic import Cosine
-from labcore.data.datadict_storage import load_as_xr
-from cqedtoolbox.measurement_lib.opx.single_transmon import *
-
-
-### adding this:
-
-single_transmon_options = options
+from cqedtoolbox.setup_measurements import run_measurement, getp, param_from_name
+from cqedtoolbox.measurement_lib.opx.single_transmon import options as single_transmon_options, measure_qubit, prepare
 
 angles1 = [0.0, 0.0, 0.25, 0.0, 0.25,
            0.0, 0.25, 0.0, 0.25, 0.0, 0.25, 0.0, 0.25, 0.0, 0.0, 0.25, 0.25,
@@ -112,7 +100,7 @@ def allXY(n_reps):
                 prepare()
                 
                 reset_frame(f"{single_transmon_options.qubit_element}")
-                align(f"{single_transmon_options.qubit_element}", options.readout_element)
+                align(f"{single_transmon_options.qubit_element}", single_transmon_options.readout_element)
                 frame_rotation_2pi(angle1, f"{single_transmon_options.qubit_element}")
 
                 with if_(amp1==1):
@@ -140,7 +128,7 @@ def allXY(n_reps):
 
                 wait(4)
                 frame_rotation_2pi(-angle2, f"{single_transmon_options.qubit_element}")
-                align(f"{single_transmon_options.qubit_element}", options.readout_element)
+                align(f"{single_transmon_options.qubit_element}", single_transmon_options.readout_element)
                 wait(40)
                 measure_qubit(I, Q)
 
@@ -196,13 +184,13 @@ def not_allXY(n_reps, range):
                 prepare()
                 
                 reset_frame(f"{single_transmon_options.qubit_element}")
-                align(f"{single_transmon_options.qubit_element}", options.readout_element)
+                align(f"{single_transmon_options.qubit_element}", single_transmon_options.readout_element)
                 frame_rotation_2pi(angle1, f"{single_transmon_options.qubit_element}")
                 play(f'{single_transmon_options.qubit_element}_pi_pulse' * amp(amp1), f"{single_transmon_options.qubit_element}")
                 frame_rotation_2pi(-angle1 + angle2, f"{single_transmon_options.qubit_element}")
                 play(f'{single_transmon_options.qubit_element}_pi_pulse' * amp(amp2), f"{single_transmon_options.qubit_element}")
                 frame_rotation_2pi(-angle2, f"{single_transmon_options.qubit_element}")
-                align(f"{single_transmon_options.qubit_element}", options.readout_element)
+                align(f"{single_transmon_options.qubit_element}", single_transmon_options.readout_element)
 
                 measure_qubit(I, Q)
 
@@ -333,26 +321,27 @@ def measure_not_allXY_vs_detuning_and_amp(qubit_name, n_reps, range):
 
     data_loc, _ = run_measurement(sweep=swp, name=f'not_AllXY_vs_detuning_and_amp')
     return data_loc
-    
 
-if __name__ == "__main__":
 
-    qubit_name = 'qC'
-    n_reps = 5_000
-
-    #measure_not_allXY(qubit_name=qubit_name, n_reps=n_reps, range=[18, 19])
-
-    #measure_allXY(qubit_name=qubit_name, n_reps=n_reps)
-
-    #measure_not_allXY_vs_DRAG(qubit_name=qubit_name, n_reps=n_reps, range=[19, 21])
-
-    #measure_allXY_vs_detuning(qubit_name=qubit_name, n_reps=n_reps)
-
-    #measure_allXY_vs_amp(qubit_name=qubit_name, n_reps=n_reps)
-
-    #measure_allXY_vs_DRAG(qubit_name=qubit_name, n_reps=n_reps)
-
-    measure_not_allXY_vs_detuning_and_amp(qubit_name=qubit_name, n_reps=n_reps, range=[10, 33])
+# TODO: Clean this up
+# if __name__ == "__main__":
+#
+#     qubit_name = 'qC'
+#     n_reps = 5_000
+#
+#     #measure_not_allXY(qubit_name=qubit_name, n_reps=n_reps, range=[18, 19])
+#
+#     #measure_allXY(qubit_name=qubit_name, n_reps=n_reps)
+#
+#     #measure_not_allXY_vs_DRAG(qubit_name=qubit_name, n_reps=n_reps, range=[19, 21])
+#
+#     #measure_allXY_vs_detuning(qubit_name=qubit_name, n_reps=n_reps)
+#
+#     #measure_allXY_vs_amp(qubit_name=qubit_name, n_reps=n_reps)
+#
+#     #measure_allXY_vs_DRAG(qubit_name=qubit_name, n_reps=n_reps)
+#
+#     measure_not_allXY_vs_detuning_and_amp(qubit_name=qubit_name, n_reps=n_reps, range=[10, 33])
     
     
   
