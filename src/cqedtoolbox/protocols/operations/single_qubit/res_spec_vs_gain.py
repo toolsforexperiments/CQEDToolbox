@@ -20,7 +20,7 @@ from cqedtoolbox.protocols.parameters import (
     StartReadoutFrequency,
     EndReadoutFrequency,
     ReadoutGain,
-    ReadoutLength, StartReadoutGain, EndReadoutGain, ResonatorSpecSteps
+    ReadoutLength, StartReadoutGain, EndReadoutGain, ResonatorSpecSteps, ResonatorSpecVsGainSteps,
 )
 from cqedtoolbox.protocols.operations.single_qubit.res_spec import ResonatorSpectroscopy, SyntheticHangerResonatorData
 from cqedtoolbox.measurement_lib.qick.single_transmon_v2 import FreqGainSweepProgram
@@ -47,7 +47,7 @@ class ResonatorSpectroscopyVsGain(ProtocolOperation):
             readout_length=ReadoutLength(params),
             start_gain=StartReadoutGain(params),
             end_gain=EndReadoutGain(params),
-            delay=Delay(params)
+            gain_steps=ResonatorSpecVsGainSteps(params),
         )
         self._register_outputs(
             readout_gain=ReadoutGain(params)
@@ -67,20 +67,12 @@ class ResonatorSpectroscopyVsGain(ProtocolOperation):
         self.snr_values = []
 
     def _measure_qick(self) -> Path:
+        logger.info("Starting qick resonator spectroscopy vs gain measurement")
 
-        old_delay = self.delay()
-
-        try:
-            self.delay(10)
-            logger.info("Starting qick resonator spectroscopy vs gain measurement")
-
-            sweep = FreqGainSweepProgram()
-            logger.debug("Sweep created, running measurement")
-            loc, da = run_and_save_sweep(sweep, "data", self.name)
-            logger.info("Measurement complete")
-
-        finally:
-            self.delay(old_delay)
+        sweep = FreqGainSweepProgram()
+        logger.debug("Sweep created, running measurement")
+        loc, da = run_and_save_sweep(sweep, "data", self.name)
+        logger.info("Measurement complete")
 
         return loc
 

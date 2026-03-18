@@ -197,6 +197,25 @@ class Delay(ProtocolParameterBase):
     def _dummy_setter(self, value):
         return self.params.params.msmt_params.delay(value)
 
+@dataclass
+class ResonatorSpecVsGainSteps(ProtocolParameterBase):
+    name: str = field(default="resonator_spec_vs_gain_steps", init=False)
+    description: str = field(default="Number of steps for resonator spectroscopy vs gain", init=False)
+
+    def _dummy_getter(self):
+        return self.params.readout.resonator_spec_vs_gain_steps()
+
+    def _dummy_setter(self, value):
+        return self.params.readout.resonator_spec_vs_gain_steps(value)
+
+    def _qick_getter(self):
+        active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
+        return nestedAttributeFromString(self.params, f"{active_qubit}.scripts.res_spec_vs_gain.steps")()
+
+    def _qick_setter(self, value):
+        active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
+        return nestedAttributeFromString(self.params, f"{active_qubit}.scripts.res_spec_vs_gain.steps")(value)
+
 
 @dataclass
 class StartReadoutGain(ProtocolParameterBase):
@@ -209,6 +228,14 @@ class StartReadoutGain(ProtocolParameterBase):
     def _dummy_setter(self, value):
         return self.params.readout.start_g(value)
 
+    def _qick_getter(self):
+        active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
+        return nestedAttributeFromString(self.params, f"{active_qubit}.scripts.res_spec_vs_gain.start_g")()
+
+    def _qick_setter(self, value):
+        active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
+        return nestedAttributeFromString(self.params, f"{active_qubit}.scripts.res_spec_vs_gain.start_g")(value)
+
 
 @dataclass
 class EndReadoutGain(ProtocolParameterBase):
@@ -220,6 +247,14 @@ class EndReadoutGain(ProtocolParameterBase):
 
     def _dummy_setter(self, value):
         return self.params.readout.end_g(value)
+
+    def _qick_getter(self):
+        active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
+        return nestedAttributeFromString(self.params, f"{active_qubit}.scripts.res_spec_vs_gain.end_g")()
+
+    def _qick_setter(self, value):
+        active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
+        return nestedAttributeFromString(self.params, f"{active_qubit}.scripts.res_spec_vs_gain.end_g")(value)
 
 
 @dataclass
