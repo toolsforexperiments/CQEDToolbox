@@ -52,6 +52,7 @@ class FreqSweepProgram(AveragerProgramV2):
         self.declare_readout(ch=ro_adc_ch, length=cfg['ro_len'])
 
         self.add_loop("ro_freqs_loop", self.cfg["ro_freq_steps"])
+
         self.add_readoutconfig(ch=ro_adc_ch, name="readout", freq=cfg['ro_freq_loop_var'], gen_ch=ro_gen_ch)  # Sweep variable
 
         self.add_pulse(ch=ro_gen_ch, name="probe_pulse", ro_ch=ro_adc_ch,
@@ -168,41 +169,47 @@ class PulseProbeSpectroscopy(AveragerProgramV2):
     while the pump tone excites the qubit.
     '''
     def _initialize(self, cfg):
-        ro_ch = cfg['ro_ch']
-        ro_gen_ch = cfg['ro_gen_ch']
-        q_gen_ch = cfg['q_gen_ch']
+        ro_adc_ch = cfg['ro_adc_ch']
+        ro_dac_ch = cfg['ro_dac_ch']
+        q_dac_ch = cfg['q_dac_ch']
 
-        self.declare_gen(ch=q_gen_ch, nqz=cfg['q_nqz'])
-        self.declare_gen(ch=ro_gen_ch, nqz=cfg['ro_nqz'])
-        self.declare_readout(ch=ro_ch, length=cfg['ro_len'])
+        self.declare_gen(ch=ro_dac_ch, nqz=cfg['ro_nqz'])
+        self.declare_readout(ch=ro_adc_ch, length=cfg['ro_len'])
 
-        # Pump pulse defintiion
-        self.add_loop("q_ge_freq_loop", self.cfg["steps"])
-        self.add_pulse(ch=q_gen_ch, name='pump_pulse',
+        self.declare_gen(ch=q_dac_ch, nqz=cfg['q_nqz'])
+
+        # Pump pulse definition
+        self.add_loop("q_freqs_loop", self.cfg["q_freq_steps"])
+        self.add_pulse(ch=q_dac_ch, name='pump_pulse',
                         style='const',
-                        freq=cfg['q_ges'],  # Sweep variable
-                        length=cfg['q_flat_len'],
-                        phase=cfg['q_ge_phase'],
-                        gain=cfg['q_ge_gain'])
+                        freq=cfg['q_freq_loop_var'],  # Sweep variable
+                        length=cfg['q_const_len'],
+                        phase=cfg['q_const_phase'],
+                        gain=cfg['q_const_gain'])
         
         # Probe pulse definition
-        self.add_readoutconfig(ch=ro_ch, name="myro", freq=cfg['ro_freq'], gen_ch=ro_gen_ch)
-        self.add_pulse(ch=ro_gen_ch, name="read_pulse", ro_ch=ro_ch, 
-                       style="const", 
-                       freq=cfg['ro_freq'], 
+        self.add_readoutconfig(ch=ro_adc_ch, name="readout", freq=cfg['ro_freq'], gen_ch=ro_dac_ch)
+
+        self.add_pulse(ch=ro_dac_ch, name="read_pulse", ro_ch=ro_adc_ch,
+                       style="const",
+                       freq=cfg['ro_freq'],
                        length=cfg['ro_len'],
                        phase=cfg['ro_phase'],
-                       gain=cfg['ro_gain'], 
-                      )
+                       gain=cfg['ro_gain'],
+                       )
 
     def _body(self, cfg):
-        # if you delay the config by too long, you can see the readout get reconfigured in the middle of your pulse
-        self.send_readoutconfig(ch=cfg['ro_ch'], name="myro", t=0)
+        ro_adc_ch = cfg['ro_adc_ch']
+        ro_dac_ch = cfg['ro_dac_ch']
+        q_dac_ch = cfg['q_dac_ch']
 
-        self.pulse(ch=cfg['q_gen_ch'], name='pump_pulse', t=0)
+        # if you delay the config by too long, you can see the readout get reconfigured in the middle of your pulse
+        self.send_readoutconfig(ch=ro_adc_ch, name="readout", t=0)
+
+        self.pulse(ch=q_dac_ch, name='pump_pulse', t=0)
         self.delay_auto(t=0.05, gens=True, ros=False, tag='wait_time')
-        self.pulse(ch=cfg['ro_gen_ch'], name="read_pulse", t=0)
-        self.trigger(ros=[cfg['ro_ch']], pins=[0], t=cfg['trig_time'])
+        self.pulse(ch=ro_dac_ch, name="read_pulse", t=0)
+        self.trigger(ros=[ro_dac_ch], pins=[0], t=cfg['trig_time'])
 
 
 @QickBoardSweep(
