@@ -45,28 +45,31 @@ class FreqSweepProgram(AveragerProgramV2):
     Performs single tone spectroscopy on the resonator.
     '''
     def _initialize(self, cfg):
-        ro_ch = cfg['ro_ch']
-        gen_ch = cfg['ro_gen_ch']
+        ro_adc_ch = cfg['ro_adc_ch']
+        ro_gen_ch = cfg['ro_dac_ch']
         
-        self.declare_gen(ch=gen_ch, nqz=cfg['ro_nqz'])
-        self.declare_readout(ch=ro_ch, length=cfg['ro_len'])
+        self.declare_gen(ch=ro_gen_ch, nqz=cfg['ro_nqz'])
+        self.declare_readout(ch=ro_adc_ch, length=cfg['ro_len'])
 
-        self.add_loop("ro_freq_loop", self.cfg["steps"])
-        self.add_readoutconfig(ch=ro_ch, name="myro", freq=cfg['ro_freqs'], gen_ch=gen_ch)  # Sweep variable
+        self.add_loop("ro_freqs_loop", self.cfg["ro_steps"])
+        self.add_readoutconfig(ch=ro_adc_ch, name="readout", freq=cfg['ro_freq_loop_var'], gen_ch=ro_gen_ch)  # Sweep variable
 
-        self.add_pulse(ch=gen_ch, name="probe_pulse", ro_ch=ro_ch, 
-                       style="const", 
-                       freq=cfg['ro_freqs'],  # Sweep variable 
+        self.add_pulse(ch=ro_gen_ch, name="probe_pulse", ro_ch=ro_adc_ch,
+                       style="const",
+                       freq=cfg['ro_freq_loop_var'],  # Sweep variable
                        length=cfg['ro_len'],
                        phase=cfg['ro_phase'],
-                       gain=cfg['ro_gain'], 
-                      )
+                       gain=cfg['ro_gain'],
+                       )
         
     def _body(self, cfg):
-        self.send_readoutconfig(ch=cfg['ro_ch'], name="myro", t=0)
+        ro_adc_ch = cfg['ro_adc_ch']
+        ro_gen_ch = cfg['ro_dac_ch']
 
-        self.pulse(ch=cfg['ro_gen_ch'], name="probe_pulse", t=0)
-        self.trigger(ros=[cfg['ro_ch']], pins=[0], t=cfg['trig_time'])
+        self.send_readoutconfig(ch=ro_adc_ch, name="readout", t=0)
+
+        self.pulse(ch=ro_gen_ch, name="probe_pulse", t=0)
+        self.trigger(ros=[ro_adc_ch], pins=[0], t=cfg['trig_time'])
 
 
 @QickBoardSweep(
