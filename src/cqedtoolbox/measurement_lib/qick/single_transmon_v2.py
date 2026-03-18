@@ -114,52 +114,6 @@ class FreqGainSweepProgram(AveragerProgramV2):
 
 
 @QickBoardSweep(
-    PulseVariable("freq", pulse_parameter="probe_pulse", sweep_parameter="freq"),
-    ComplexQICKData("signal", depends_on=["freq"])
-)
-class ResProbeProgram(AveragerProgramV2):
-    '''
-    Performs single tone spectroscopy on RO resonator after exciting g->e transition of qubit.
-    '''
-    def _initialize(self, cfg):
-        ro_ch = cfg['ro_ch']
-        gen_ch = cfg['ro_gen_ch']
-        q_gen_ch = cfg['q_gen_ch']
-
-        self.declare_gen(ch=q_gen_ch, nqz=cfg['q_nqz'])
-        self.declare_gen(ch=gen_ch, nqz=cfg['ro_nqz'])
-        self.declare_readout(ch=ro_ch, length=cfg['ro_len'])
-
-        self.add_loop("ro_freq_loop", self.cfg["steps"])
-
-        self.add_gauss(ch=q_gen_ch, name="gauss", sigma=cfg['q_ge_sig'], length=4*cfg['q_ge_sig'], even_length=True)        
-        self.add_pulse(ch=q_gen_ch, name="pi_pulse",  
-                       style="arb", 
-                       envelope="gauss", 
-                       freq=cfg['q_ge'], 
-                       phase=cfg['q_ge_phase'],
-                       gain=cfg['q_ge_gain'], 
-                      )
-        self.add_readoutconfig(ch=ro_ch, name="myro", freq=cfg['ro_freqs'], gen_ch=gen_ch)
-
-        self.add_pulse(ch=gen_ch, name="probe_pulse", ro_ch=ro_ch, 
-                       style="const", 
-                       freq=cfg['ro_freqs'],  # Sweep variable
-                       length=cfg['ro_len'],
-                       phase=cfg['ro_phase'],
-                       gain=cfg['ro_gain'], 
-                      )
-        
-    def _body(self, cfg):
-        self.send_readoutconfig(ch=cfg['ro_ch'], name="myro", t=0)
-
-        self.pulse(ch=cfg['q_gen_ch'], name='pi_pulse', t=0)
-        self.delay_auto(t=0.00, gens=True, ros=False)  
-        self.pulse(ch=cfg['ro_gen_ch'], name="probe_pulse", t=0)
-        self.trigger(ros=[cfg['ro_ch']], pins=[0], t=cfg['trig_time'])
-        
-        
-@QickBoardSweep(
     PulseVariable('freq', pulse_parameter="pump_pulse", sweep_parameter="freq"),
     ComplexQICKData('signal', depends_on=['freq'])
 )
@@ -168,6 +122,7 @@ class PulseProbeSpectroscopy(AveragerProgramV2):
     Performs two-tone spectroscopy where the probe tone is probing the readout resonator
     while the pump tone excites the qubit.
     '''
+
     def _initialize(self, cfg):
         ro_adc_ch = cfg['ro_adc_ch']
         ro_dac_ch = cfg['ro_dac_ch']
@@ -181,12 +136,12 @@ class PulseProbeSpectroscopy(AveragerProgramV2):
         # Pump pulse definition
         self.add_loop("q_freqs_loop", self.cfg["q_freq_steps"])
         self.add_pulse(ch=q_dac_ch, name='pump_pulse',
-                        style='const',
-                        freq=cfg['q_freq_loop_var'],  # Sweep variable
-                        length=cfg['q_const_len'],
-                        phase=cfg['q_const_phase'],
-                        gain=cfg['q_const_gain'])
-        
+                       style='const',
+                       freq=cfg['q_freq_loop_var'],  # Sweep variable
+                       length=cfg['q_const_len'],
+                       phase=cfg['q_const_phase'],
+                       gain=cfg['q_const_gain'])
+
         # Probe pulse definition
         self.add_readoutconfig(ch=ro_adc_ch, name="readout", freq=cfg['ro_freq'], gen_ch=ro_dac_ch)
 
@@ -305,6 +260,53 @@ class PiSpecProgram(AveragerProgramV2):
         self.pulse(ch=cfg['q_gen_ch'], name='pi_pulse', t=0)
         self.delay_auto(t=0.0, gens=True, ros=False, tag='wait_time')
         self.pulse(ch=cfg['ro_gen_ch'], name="read_pulse", t=0)
+        self.trigger(ros=[cfg['ro_ch']], pins=[0], t=cfg['trig_time'])
+
+
+@QickBoardSweep(
+    PulseVariable("freq", pulse_parameter="probe_pulse", sweep_parameter="freq"),
+    ComplexQICKData("signal", depends_on=["freq"])
+)
+class ResProbeProgram(AveragerProgramV2):
+    '''
+    Performs single tone spectroscopy on RO resonator after exciting g->e transition of qubit.
+    '''
+
+    def _initialize(self, cfg):
+        ro_ch = cfg['ro_ch']
+        gen_ch = cfg['ro_gen_ch']
+        q_gen_ch = cfg['q_gen_ch']
+
+        self.declare_gen(ch=q_gen_ch, nqz=cfg['q_nqz'])
+        self.declare_gen(ch=gen_ch, nqz=cfg['ro_nqz'])
+        self.declare_readout(ch=ro_ch, length=cfg['ro_len'])
+
+        self.add_loop("ro_freq_loop", self.cfg["steps"])
+
+        self.add_gauss(ch=q_gen_ch, name="gauss", sigma=cfg['q_ge_sig'], length=4 * cfg['q_ge_sig'], even_length=True)
+        self.add_pulse(ch=q_gen_ch, name="pi_pulse",
+                       style="arb",
+                       envelope="gauss",
+                       freq=cfg['q_ge'],
+                       phase=cfg['q_ge_phase'],
+                       gain=cfg['q_ge_gain'],
+                       )
+        self.add_readoutconfig(ch=ro_ch, name="myro", freq=cfg['ro_freqs'], gen_ch=gen_ch)
+
+        self.add_pulse(ch=gen_ch, name="probe_pulse", ro_ch=ro_ch,
+                       style="const",
+                       freq=cfg['ro_freqs'],  # Sweep variable
+                       length=cfg['ro_len'],
+                       phase=cfg['ro_phase'],
+                       gain=cfg['ro_gain'],
+                       )
+
+    def _body(self, cfg):
+        self.send_readoutconfig(ch=cfg['ro_ch'], name="myro", t=0)
+
+        self.pulse(ch=cfg['q_gen_ch'], name='pi_pulse', t=0)
+        self.delay_auto(t=0.00, gens=True, ros=False)
+        self.pulse(ch=cfg['ro_gen_ch'], name="probe_pulse", t=0)
         self.trigger(ros=[cfg['ro_ch']], pins=[0], t=cfg['trig_time'])
 
 
