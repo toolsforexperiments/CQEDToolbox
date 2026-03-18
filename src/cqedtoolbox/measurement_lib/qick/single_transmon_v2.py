@@ -134,10 +134,10 @@ class PulseProbeSpectroscopy(AveragerProgramV2):
         self.declare_gen(ch=q_dac_ch, nqz=cfg['q_nqz'])
 
         # Pump pulse definition
-        self.add_loop("q_freqs_loop", self.cfg["q_freq_steps"])
+        self.add_loop("sat_spec_freqs_loop", self.cfg["sat_spec_freq_steps"])
         self.add_pulse(ch=q_dac_ch, name='pump_pulse',
                        style='const',
-                       freq=cfg['q_freq_loop_var'],  # Sweep variable
+                       freq=cfg['sat_spec_freq_loop_var'],  # Sweep variable
                        length=cfg['q_const_len'],
                        phase=cfg['q_const_phase'],
                        gain=cfg['q_const_gain'])
@@ -230,42 +230,42 @@ class PiSpecProgram(AveragerProgramV2):
     This runs a pi pulse spectroscopy in order to nail down the qubit frequency by fitting it to a gaussian pulse.
     '''
     def _initialize(self, cfg):
-        ro_ch = cfg['ro_ch']
-        ro_gen_ch = cfg['ro_gen_ch']
-        q_gen_ch = cfg['q_gen_ch']
+        ro_adc_ch = cfg['ro_adc_ch']
+        ro_dac_ch = cfg['ro_dac_ch']
+        q_dac_ch = cfg['q_dac_ch']
 
-        self.declare_gen(ch=q_gen_ch, nqz=cfg['q_nqz'])
-        self.declare_gen(ch=ro_gen_ch, nqz=cfg['ro_nqz'])
-        self.declare_readout(ch=ro_ch, length=cfg['ro_len'])
+        self.declare_gen(ch=q_dac_ch, nqz=cfg['q_nqz'])
+        self.declare_gen(ch=ro_dac_ch, nqz=cfg['ro_nqz'])
+        self.declare_readout(ch=ro_adc_ch, length=cfg['ro_len'])
 
         # Pump pulse definition
-        self.add_loop("q_ge_freq_loop", self.cfg["steps"])
-        self.add_gauss(ch=q_gen_ch, name="gauss", sigma=cfg['q_ge_sig'], length=4*cfg['q_ge_sig'], even_length=True)        
-        self.add_pulse(ch=q_gen_ch, name="pi_pulse",  
-                       style="arb", 
-                       envelope="gauss", 
-                       freq=cfg['q_ges'],  # Sweep variable
-                       phase=cfg['q_ge_phase'],
-                       gain=cfg['q_ge_gain'], 
+        self.add_loop("pi_spec_freqs_loop", self.cfg["pi_spec_freq_steps"])
+        self.add_gauss(ch=q_dac_ch, name="gauss", sigma=cfg['q_pi_sigma'], length=cfg['q_pi_n_sigma']*cfg['q_pi_sigma'], even_length=True)
+        self.add_pulse(ch=q_dac_ch, name="pi_pulse",
+                       style="arb",
+                       envelope="gauss",
+                       freq=cfg['pi_spec_freq_loop_var'],  # Sweep variable
+                       phase=cfg['q_pi_phase'],
+                       gain=cfg['q_pi_gain'],
                       )
-        
+
         # Probe pulse definition
-        self.add_readoutconfig(ch=ro_ch, name="myro", freq=cfg['ro_freq'], gen_ch=ro_gen_ch)
-        self.add_pulse(ch=ro_gen_ch, name="read_pulse", ro_ch=ro_ch, 
-                       style="const", 
-                       freq=cfg['ro_freq'], 
+        self.add_readoutconfig(ch=ro_adc_ch, name="readout", freq=cfg['ro_freq'], gen_ch=ro_dac_ch)
+        self.add_pulse(ch=ro_dac_ch, name="read_pulse", ro_ch=ro_adc_ch,
+                       style="const",
+                       freq=cfg['ro_freq'],
                        length=cfg['ro_len'],
                        phase=cfg['ro_phase'],
-                       gain=cfg['ro_gain'], 
+                       gain=cfg['ro_gain'],
                       )
-        
-    def _body(self, cfg):
-        self.send_readoutconfig(ch=cfg['ro_ch'], name="myro", t=0)
 
-        self.pulse(ch=cfg['q_gen_ch'], name='pi_pulse', t=0)
+    def _body(self, cfg):
+        self.send_readoutconfig(ch=cfg['ro_adc_ch'], name="readout", t=0)
+
+        self.pulse(ch=cfg['q_dac_ch'], name='pi_pulse', t=0)
         self.delay_auto(t=0.0, gens=True, ros=False, tag='wait_time')
-        self.pulse(ch=cfg['ro_gen_ch'], name="read_pulse", t=0)
-        self.trigger(ros=[cfg['ro_ch']], pins=[0], t=cfg['trig_time'])
+        self.pulse(ch=cfg['ro_dac_ch'], name="read_pulse", t=0)
+        self.trigger(ros=[cfg['ro_adc_ch']], pins=[0], t=cfg['trig_time'])
 
 
 @QickBoardSweep(

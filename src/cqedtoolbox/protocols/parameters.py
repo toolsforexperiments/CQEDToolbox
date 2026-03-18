@@ -293,19 +293,6 @@ class QubitLO(ProtocolParameterBase):
         return nestedAttributeFromString(self.params, f"{active_qubit}.LO")(value)
 
 
-@dataclass
-class QubitIF(ProtocolParameterBase):
-    name: str = field(default="qubit_IF", init=False)
-    description: str = field(default="IF frequency of the qubit drive", init=False)
-
-    def _dummy_getter(self):
-        active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
-        return nestedAttributeFromString(self.params, f"{active_qubit}.IF")()
-
-    def _dummy_setter(self, value):
-        active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
-        return nestedAttributeFromString(self.params, f"{active_qubit}.IF")(value)
-
 
 @dataclass
 class StartSaturationSpecFrequency(ProtocolParameterBase):
@@ -350,29 +337,6 @@ class EndSaturationSpecFrequency(ProtocolParameterBase):
         active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
         return nestedAttributeFromString(self.params, f"{active_qubit}.scripts.sat_spec.end_f")(value)
 
-
-@dataclass
-class StartQubitFrequency(ProtocolParameterBase):
-    name: str = field(default="start_qubit_frequency", init=False)
-    description: str = field(default="Initial frequency of a qubit frequency sweep", init=False)
-
-    def _dummy_getter(self):
-        return self.params.qubit.start_f()
-
-    def _dummy_setter(self, value):
-        return self.params.qubit.start_f(value)
-
-
-@dataclass
-class EndQubitFrequency(ProtocolParameterBase):
-    name: str = field(default="end_qubit_frequency", init=False)
-    description: str = field(default="Final frequency of a qubit frequency sweep", init=False)
-
-    def _dummy_getter(self):
-        return self.params.qubit.end_f()
-
-    def _dummy_setter(self, value):
-        return self.params.qubit.end_f(value)
 
 
 @dataclass
@@ -457,6 +421,58 @@ class PiSpecSteps(ProtocolParameterBase):
     def _dummy_setter(self, value):
         active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
         return nestedAttributeFromString(self.params, f"{active_qubit}.pi_spec_steps")(value)
+
+    def _qick_getter(self):
+        active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
+        return nestedAttributeFromString(self.params, f"{active_qubit}.scripts.pi_spec.steps")()
+
+    def _qick_setter(self, value):
+        active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
+        return nestedAttributeFromString(self.params, f"{active_qubit}.scripts.pi_spec.steps")(value)
+
+
+@dataclass
+class StartPiSpecFrequency(ProtocolParameterBase):
+    name: str = field(default="start_pi_spec_frequency", init=False)
+    description: str = field(default="Initial frequency of a pi spectroscopy frequency sweep", init=False)
+
+    def _dummy_getter(self):
+        active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
+        return nestedAttributeFromString(self.params, f"{active_qubit}.pi_spec_start")()
+
+    def _dummy_setter(self, value):
+        active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
+        return nestedAttributeFromString(self.params, f"{active_qubit}.pi_spec_start")(value)
+
+    def _qick_getter(self):
+        active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
+        return nestedAttributeFromString(self.params, f"{active_qubit}.scripts.pi_spec.start_f")()
+
+    def _qick_setter(self, value):
+        active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
+        return nestedAttributeFromString(self.params, f"{active_qubit}.scripts.pi_spec.start_f")(value)
+
+
+@dataclass
+class EndPiSpecFrequency(ProtocolParameterBase):
+    name: str = field(default="end_pi_spec_frequency", init=False)
+    description: str = field(default="Final frequency of a pi spectroscopy frequency sweep", init=False)
+
+    def _dummy_getter(self):
+        active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
+        return nestedAttributeFromString(self.params, f"{active_qubit}.pi_spec_end")()
+
+    def _dummy_setter(self, value):
+        active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
+        return nestedAttributeFromString(self.params, f"{active_qubit}.pi_spec_end")(value)
+
+    def _qick_getter(self):
+        active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
+        return nestedAttributeFromString(self.params, f"{active_qubit}.scripts.pi_spec.end_f")()
+
+    def _qick_setter(self, value):
+        active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
+        return nestedAttributeFromString(self.params, f"{active_qubit}.scripts.pi_spec.end_f")(value)
 
 
 @dataclass

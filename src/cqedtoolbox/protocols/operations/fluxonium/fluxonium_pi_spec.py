@@ -18,7 +18,7 @@ from labcore.measurement.record import record_as, independent, dependent
 from labcore.protocols.base import ProtocolOperation, OperationStatus, serialize_fit_params
 from cqedtoolbox.protocols.operations.fluxonium.res_spec_vs_flux import _readout_frequencies, _fluxonium_basis
 from cqedtoolbox.protocols.parameters import (
-    Repetition, StartFlux, EndFlux, FluxSteps, ResonatorSpecSteps, StartQubitFrequency, EndQubitFrequency,
+    Repetition, StartFlux, EndFlux, FluxSteps, ResonatorSpecSteps, StartPiSpecFrequency, EndPiSpecFrequency,
     QubitFrequency, GainPulseDuration, ECParam, ELParam, EJParam, ZeroFluxCurrent, ReadoutFrequency
 )
 
@@ -119,8 +119,8 @@ class FluxoniumPiSpectroscopy(ProtocolOperation):
             flux_end=EndFlux(params),
             flux_steps=FluxSteps(params),
             steps=ResonatorSpecSteps(params), # frequency steps for qubit drive, not readout spec
-            start_freq=StartQubitFrequency(params),
-            end_freq=EndQubitFrequency(params),
+            start_freq=StartPiSpecFrequency(params),
+            end_freq=EndPiSpecFrequency(params),
             rabi_duration=GainPulseDuration(params),
             EC=ECParam(params),
             EL=ELParam(params),
