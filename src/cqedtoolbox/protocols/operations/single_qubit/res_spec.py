@@ -89,8 +89,6 @@ class ResonatorSpectroscopy(ProtocolOperation):
         self.fit_result = None
         self.improvements = None
 
-        self.test_all_params()
-
     def _measure_qick(self) -> Path:
         logger.info("Starting qick resonator spectroscopy measurement")
 

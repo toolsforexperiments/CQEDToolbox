@@ -47,7 +47,7 @@ class ResonatorSpecSteps(ProtocolParameterBase):
 
     def _qick_setter(self, value):
         active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
-        return nestedAttributeFromString(self.params, f"{active_qubit}.res_spec_steps")(value)
+        return nestedAttributeFromString(self.params, f"{active_qubit}.scripts.res_spec.steps")(value)
 
 
 @dataclass
