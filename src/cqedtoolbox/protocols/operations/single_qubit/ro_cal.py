@@ -113,8 +113,8 @@ class ReadoutCalibration(ProtocolOperation):
         # Store old reps, set to 1000 for single-shot
         self.old_reps = self.repetitions()
         logger.debug(f"Storing old reps: {self.old_reps}")
-        logger.debug("Setting reps=1000 for single-shot measurement")
-        self.repetitions(1000)
+        logger.debug("Setting reps=1 for single-shot measurement")
+        self.repetitions(1)
 
         try:
             # Measure ground state

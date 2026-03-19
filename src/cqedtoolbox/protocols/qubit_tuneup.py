@@ -6,7 +6,7 @@ from cqedtoolbox.protocols.operations import ResonatorSpectroscopy, ResonatorSpe
 
 class QubitTuneup(ProtocolBase):
 
-    def __init__(self, params, report_path: Path = Path("operations")):
+    def __init__(self, params, report_path: Path = Path(".")):
         super().__init__(report_path)
 
         self.root_branch = BranchBase("QubitTuneup")

@@ -91,22 +91,11 @@ class T2ROperation(ProtocolOperation):
     def _measure_qick(self) -> Path:
         logger.info("Starting qick T2 Ramsey measurement")
 
-        # Store old n_echo value and set to 0 for T2R measurement
-        self.old_n_echo = self.n_echos()
-        logger.debug(f"Storing old n_echo value: {self.old_n_echo}, setting to 0")
-        self.n_echos(0)
-
-        try:
-            sweep = T2RProgram()
-            logger.debug("Sweep created, running measurement")
-            loc, da = run_and_save_sweep(sweep, "data", self.name)
-            logger.info("Measurement complete")
-            return loc
-        finally:
-            # Restore n_echo value
-            if self.old_n_echo is not None:
-                logger.debug(f"Restoring n_echo to {self.old_n_echo}")
-                self.n_echos(self.old_n_echo)
+        sweep = T2RProgram()
+        logger.debug("Sweep created, running measurement")
+        loc, da = run_and_save_sweep(sweep, "data", self.name)
+        logger.info("Measurement complete")
+        return loc
 
     def _load_data_qick(self):
         path = self.data_loc / "data.ddh5"

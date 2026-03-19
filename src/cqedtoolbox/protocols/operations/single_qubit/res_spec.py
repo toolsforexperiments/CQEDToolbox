@@ -12,8 +12,9 @@ from labcore.data.datadict_storage import datadict_from_hdf5
 from labcore.measurement import sweep_parameter, record_as
 
 from labcore.protocols.base import ProtocolOperation, OperationStatus, serialize_fit_params, ParamImprovement
-from cqedtoolbox.protocols.parameters import (ReadoutLO, ReadoutIF, Repetition,
-                                              ResonatorSpecSteps, ReadoutGain, ReadoutLength, StartReadoutFrequency, EndReadoutFrequency)
+from cqedtoolbox.protocols.parameters import (Repetition,
+                                              ResonatorSpecSteps, ReadoutGain, ReadoutLength, StartReadoutFrequency,
+                                              EndReadoutFrequency, ReadoutFrequency)
 from cqedtoolbox.measurement_lib.qick.single_transmon_v2 import FreqSweepProgram
 
 from cqedtoolbox.fitfuncs.resonators import HangerResponseBruno
@@ -69,12 +70,11 @@ class ResonatorSpectroscopy(ProtocolOperation):
             steps=ResonatorSpecSteps(params),
             gain=ReadoutGain(params),
             length=ReadoutLength(params),
-            readout_lo=ReadoutLO(params),
             start_frequency=StartReadoutFrequency(params),
             end_frequency=EndReadoutFrequency(params),
         )
         self._register_outputs(
-            readout_if=ReadoutIF(params)
+            readout_freq=ReadoutFrequency(params),
         )
         self.params = params
 
@@ -86,7 +86,10 @@ class ResonatorSpectroscopy(ProtocolOperation):
         self.magnitude = None
         self.phase = None
         self.snr = None
-        self.fit_result = None          
+        self.fit_result = None
+        self.improvements = None
+
+        self.test_all_params()
 
     def _measure_qick(self) -> Path:
         logger.info("Starting qick resonator spectroscopy measurement")
@@ -206,15 +209,15 @@ class ResonatorSpectroscopy(ProtocolOperation):
 
             logger.info(f"snr of {self.snr} is bigger than threshold of {self.SNR_THRESHOLD}. Applying new values")
 
-            old_value = self.readout_if()
+            old_value = self.readout_freq()
             new_value = self.fit_result.params["f_0"].value
 
             logger.info(f"Updating f_0 from {old_value} to {new_value}")
-            self.readout_if(new_value)
-            self.improvements = [ParamImprovement(old_value, new_value, self.readout_if)]
+            self.readout_freq(new_value)
+            self.improvements = [ParamImprovement(old_value, new_value, self.readout_freq)]
 
             msg_2 = (f"Fit was **SUCCESSFUL** with and SNR of {self.snr:.3f}. \n"
-                     f"{self.readout_if.name} shift: {old_value:.3f} -> {new_value:.3f} \n"
+                     f"{self.readout_freq.name} shift: {old_value:.3f} -> {new_value:.3f} \n"
                      f" Fit Report: \n \n ```\n{str(self.fit_result.lmfit_result.fit_report())}\n``` \n")
 
             self.report_output = [header, plot_image, msg_2]

@@ -10,6 +10,7 @@ from scipy.constants import h
 plt.switch_backend("agg")
 
 from labcore.analysis import DatasetAnalysis, Fit
+from labcore.analysis.fitfuncs.generic import Lorentzian
 from labcore.measurement.storage import run_and_save_sweep
 from labcore.data.datadict_storage import datadict_from_hdf5
 from labcore.measurement.sweep import sweep_parameter
@@ -19,28 +20,12 @@ from labcore.protocols.base import ProtocolOperation, OperationStatus, serialize
 from cqedtoolbox.protocols.parameters import (
     Repetition,
     SaturationSpecSteps,
-    StartSaturationSpecFrequency, EndSaturationSpecFrequency, QubitLO, QubitIF
+    StartSaturationSpecFrequency, EndSaturationSpecFrequency, QubitFrequency
 )
 from cqedtoolbox.measurement_lib.qick.single_transmon_v2 import PulseProbeSpectroscopy
 
 
 logger = logging.getLogger(__name__)
-
-
-class Lorentzian(Fit):
-    @staticmethod
-    def model(coordinates, x0, gamma, A, of):
-        return A * (gamma**2) / ((coordinates - x0) ** 2 + gamma**2) + of
-
-    @staticmethod
-    def guess(coordinates, data):
-        of = np.mean(data)
-        dev = data - of
-        i_max = np.argmax(np.abs(dev))
-        x0 = coordinates[i_max]
-        A = data[i_max] - of
-        gamma = np.abs((coordinates[-1] - coordinates[0])) / 20
-        return dict(x0=x0, gamma=gamma, A=A, of=of)
 
 
 @dataclass
@@ -95,10 +80,9 @@ class SaturationSpectroscopy(ProtocolOperation):
             steps=SaturationSpecSteps(params),
             start_freq=StartSaturationSpecFrequency(params),
             end_freq=EndSaturationSpecFrequency(params),
-            qubit_lo=QubitLO(params),
         )
         self._register_outputs(
-            qubit_if=QubitIF(params)
+            qubit_freq=QubitFrequency(params)
         )
 
         self.condition = f"Success if the SNR of any component (real, imaginary, or magnitude) is bigger than the current threshold of {self.SNR_THRESHOLD}"
@@ -155,7 +139,7 @@ class SaturationSpectroscopy(ProtocolOperation):
         )
 
         # Create sweep over frequencies
-        sweep = sweep_parameter('frequencies', frequencies + self.qubit_lo(), record_as(generator.generate, 'signal'))
+        sweep = sweep_parameter('frequencies', frequencies, record_as(generator.generate, 'signal'))
 
         loc, _ = run_and_save_sweep(sweep, "data", self.name)
         logger.info("Dummy saturation spectroscopy measurement complete.")
@@ -316,18 +300,18 @@ class SaturationSpectroscopy(ProtocolOperation):
         if winner_snr >= self.SNR_THRESHOLD:
             logger.info(f"{winner_name} component has highest SNR of {winner_snr:.3f}, which is above threshold of {self.SNR_THRESHOLD}. Applying new values")
 
-            old_value = self.qubit_if()
+            old_value = self.qubit_freq()
             new_value = winner_fit.params["x0"].value
 
             logger.info(f"Updating qubit frequency from {old_value} to {new_value}")
-            self.qubit_if(new_value)
+            self.qubit_freq(new_value)
 
-            self.improvements = [ParamImprovement(old_value, new_value, self.qubit_if)]
+            self.improvements = [ParamImprovement(old_value, new_value, self.qubit_freq)]
 
             # Main section with winner
             msg_main = (f"### **{winner_name} Component (SELECTED)**\n"
                        f"Fit was **SUCCESSFUL** with {winner_name} SNR of {winner_snr:.3f}\n"
-                       f"{self.qubit_if.name} shift: {old_value:.3f} -> {new_value:.3f}\n"
+                       f"{self.qubit_freq.name} shift: {old_value:.3f} -> {new_value:.3f}\n"
                        f"This component was selected because it has the highest SNR.\n\n")
 
             winner_plot = plot_map[winner_key]

@@ -17,9 +17,9 @@ from labcore.protocols.base import ProtocolOperation, OperationStatus, serialize
 from cqedtoolbox.protocols.parameters import (
     Repetition,
     PiSpecSteps,
-    StartQubitFrequency,
-    EndQubitFrequency,
-    QubitIF,
+    StartPiSpecFrequency,
+    EndPiSpecFrequency,
+    QubitFrequency,
     QubitGain,
     ReadoutGain,
     ReadoutLength
@@ -34,20 +34,25 @@ class PiSpectroscopy(ProtocolOperation):
 
     SNR_THRESHOLD = 2
 
+    _SIM_CENTER = 0.0
+    _SIM_SIGMA = 3e6  # 3 MHz
+    _SIM_AMP = 0.5
+    _SIM_NOISE_AMP = 0.02
+
     def __init__(self, params):
         super().__init__()
 
         self._register_inputs(
             repetitions=Repetition(params),
             steps=PiSpecSteps(params),
-            start_freq=StartQubitFrequency(params),
-            end_freq=EndQubitFrequency(params),
+            start_freq=StartPiSpecFrequency(params),
+            end_freq=EndPiSpecFrequency(params),
             qubit_gain=QubitGain(params),
             readout_gain=ReadoutGain(params),
             readout_length=ReadoutLength(params)
         )
         self._register_outputs(
-            qubit_if=QubitIF(params)
+            qubit_if=QubitFrequency(params)
         )
 
         self.condition = f"Success if the SNR of any component (real, imaginary, or magnitude) is bigger than the current threshold of {self.SNR_THRESHOLD}"
@@ -61,11 +66,6 @@ class PiSpectroscopy(ProtocolOperation):
         self.snr_re = None
         self.snr_imag = None
         self.snr_mag = None
-
-    _SIM_CENTER = 0.0
-    _SIM_SIGMA = 3e6  # 3 MHz
-    _SIM_AMP = 0.5
-    _SIM_NOISE_AMP = 0.02
 
     def _measure_dummy(self) -> Path:
         logger.info("Starting dummy pi spectroscopy measurement")

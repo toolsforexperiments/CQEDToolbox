@@ -17,7 +17,7 @@ from labcore.utils.misc import get_environment_packages, commit_changes_in_repo
 
 # constants
 WD = os.getcwd()
-DATADIR = os.path.join(WD, '../../../labcore/src/labcore/data')
+DATADIR = os.path.join(WD, 'data')
 
 
 @dataclass
@@ -29,7 +29,7 @@ class Options:
 
 options = Options()
 
-
+# TODO: This should be a general helper, not from setup_measurements
 def param_from_name(name: str, ):
     return nestedAttributeFromString(options.parameters, name)
 
