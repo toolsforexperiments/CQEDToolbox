@@ -1,4 +1,10 @@
+"""
+TODO LIST:
 
+* Detuning word is now being used for both the artificial detuning and chi
+* ROCalibration should store the centers of both g and e states in the parameter manager and have ProtocolParameters for them.
+
+"""
 from dataclasses import dataclass, field
 from labcore.protocols.base import ProtocolParameterBase
 from instrumentserver.helpers import nestedAttributeFromString
@@ -185,6 +191,14 @@ class Detuning(ProtocolParameterBase):
         active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
         return nestedAttributeFromString(self.params, f"{active_qubit}.detuning")(value)
 
+    def _qick_getter(self):
+        active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
+        return nestedAttributeFromString(self.params, f"{active_qubit}.qubit.chi")()
+
+    def _qick_setter(self, value):
+        active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
+        return nestedAttributeFromString(self.params, f"{active_qubit}.qubit.chi")(value)
+
 
 @dataclass
 class Delay(ProtocolParameterBase):
@@ -351,7 +365,15 @@ class StartQubitGain(ProtocolParameterBase):
     def _dummy_setter(self, value):
         active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
         return nestedAttributeFromString(self.params, f"{active_qubit}.power_rabi_start")(value)
-    
+
+    def _qick_getter(self):
+        active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
+        return nestedAttributeFromString(self.params, f"{active_qubit}.scripts.power_rabi.start_g")()
+
+    def _qick_setter(self, value):
+        active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
+        return nestedAttributeFromString(self.params, f"{active_qubit}.scripts.power_rabi.start_g")(value)
+
 
 @dataclass
 class EndQubitGain(ProtocolParameterBase):
@@ -361,10 +383,18 @@ class EndQubitGain(ProtocolParameterBase):
     def _dummy_getter(self):
         active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
         return nestedAttributeFromString(self.params, f"{active_qubit}.power_rabi_end")()
-    
+
     def _dummy_setter(self, value):
         active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
         return nestedAttributeFromString(self.params, f"{active_qubit}.power_rabi_end")(value)
+
+    def _qick_getter(self):
+        active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
+        return nestedAttributeFromString(self.params, f"{active_qubit}.scripts.power_rabi.end_g")()
+
+    def _qick_setter(self, value):
+        active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
+        return nestedAttributeFromString(self.params, f"{active_qubit}.scripts.power_rabi.end_g")(value)
     
 
 @dataclass
@@ -380,6 +410,14 @@ class T1Steps(ProtocolParameterBase):
         active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
         return nestedAttributeFromString(self.params, f"{active_qubit}.t1_steps")(value)
 
+    def _qick_getter(self):
+        active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
+        return nestedAttributeFromString(self.params, f"{active_qubit}.scripts.t1.steps")()
+
+    def _qick_setter(self, value):
+        active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
+        return nestedAttributeFromString(self.params, f"{active_qubit}.scripts.t1.steps")(value)
+
 
 @dataclass
 class T2ESteps(ProtocolParameterBase):
@@ -394,6 +432,14 @@ class T2ESteps(ProtocolParameterBase):
         active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
         return nestedAttributeFromString(self.params, f"{active_qubit}.t2e_steps")(value)
 
+    def _qick_getter(self):
+        active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
+        return nestedAttributeFromString(self.params, f"{active_qubit}.scripts.t2e.steps")()
+
+    def _qick_setter(self, value):
+        active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
+        return nestedAttributeFromString(self.params, f"{active_qubit}.scripts.t2e.steps")(value)
+
 
 @dataclass
 class T2RSteps(ProtocolParameterBase):
@@ -407,6 +453,14 @@ class T2RSteps(ProtocolParameterBase):
     def _dummy_setter(self, value):
         active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
         return nestedAttributeFromString(self.params, f"{active_qubit}.t2r_steps")(value)
+
+    def _qick_getter(self):
+        active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
+        return nestedAttributeFromString(self.params, f"{active_qubit}.scripts.t2r.steps")()
+
+    def _qick_setter(self, value):
+        active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
+        return nestedAttributeFromString(self.params, f"{active_qubit}.scripts.t2r.steps")(value)
 
 
 @dataclass
@@ -488,6 +542,14 @@ class NumGainSteps(ProtocolParameterBase):
         active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
         return nestedAttributeFromString(self.params, f"{active_qubit}.gain_steps")(value)
 
+    def _qick_getter(self):
+        active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
+        return nestedAttributeFromString(self.params, f"{active_qubit}.scripts.power_rabi.steps")()
+
+    def _qick_setter(self, value):
+        active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
+        return nestedAttributeFromString(self.params, f"{active_qubit}.scripts.power_rabi.steps")(value)
+
 
 @dataclass
 class QubitGain(ProtocolParameterBase):
@@ -501,6 +563,14 @@ class QubitGain(ProtocolParameterBase):
     def _dummy_setter(self, value):
         active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
         return nestedAttributeFromString(self.params, f"{active_qubit}.pulses.pi.amp")(value)
+
+    def _qick_getter(self):
+        active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
+        return nestedAttributeFromString(self.params, f"{active_qubit}.pulses.pi.gain")()
+
+    def _qick_setter(self, value):
+        active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
+        return nestedAttributeFromString(self.params, f"{active_qubit}.pulses.pi.gain")(value)
 
 
 @dataclass
@@ -536,6 +606,14 @@ class T1(ProtocolParameterBase):
         active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
         return nestedAttributeFromString(self.params, f"{active_qubit}.T1")(value)
 
+    def _qick_getter(self):
+        active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
+        return nestedAttributeFromString(self.params, f"{active_qubit}.qubit.T1")()
+
+    def _qick_setter(self, value):
+        active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
+        return nestedAttributeFromString(self.params, f"{active_qubit}.qubit.T1")(value)
+
 
 @dataclass
 class T2R(ProtocolParameterBase):
@@ -549,6 +627,14 @@ class T2R(ProtocolParameterBase):
     def _dummy_setter(self, value):
         active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
         return nestedAttributeFromString(self.params, f"{active_qubit}.T2R")(value)
+
+    def _qick_getter(self):
+        active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
+        return nestedAttributeFromString(self.params, f"{active_qubit}.qubit.T2R")()
+
+    def _qick_setter(self, value):
+        active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
+        return nestedAttributeFromString(self.params, f"{active_qubit}.qubit.T2R")(value)
 
 
 @dataclass
@@ -564,6 +650,14 @@ class T2E(ProtocolParameterBase):
         active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
         return nestedAttributeFromString(self.params, f"{active_qubit}.T2E")(value)
 
+    def _qick_getter(self):
+        active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
+        return nestedAttributeFromString(self.params, f"{active_qubit}.qubit.T2E")()
+
+    def _qick_setter(self, value):
+        active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
+        return nestedAttributeFromString(self.params, f"{active_qubit}.qubit.T2E")(value)
+
 
 @dataclass
 class NEchos(ProtocolParameterBase):
@@ -577,6 +671,14 @@ class NEchos(ProtocolParameterBase):
     def _dummy_setter(self, value):
         active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
         return nestedAttributeFromString(self.params, f"{active_qubit}.n_echo")(value)
+
+    def _qick_getter(self):
+        active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
+        return nestedAttributeFromString(self.params, f"{active_qubit}.scripts.t2e.n_echoes")()
+
+    def _qick_setter(self, value):
+        active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
+        return nestedAttributeFromString(self.params, f"{active_qubit}.scripts.t2e.n_echoes")(value)
 
 
 @dataclass

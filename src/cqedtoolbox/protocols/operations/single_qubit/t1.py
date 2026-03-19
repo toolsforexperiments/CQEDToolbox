@@ -87,23 +87,11 @@ class T1Operation(ProtocolOperation):
 
     def _measure_qick(self) -> Path:
         logger.info("Starting qick T1 measurement")
-
-        # Store old n_echo value and set to 0 for T1 measurement
-        self.old_n_echo = self.params.qubit.n_echo()
-        logger.debug(f"Storing old n_echo value: {self.old_n_echo}, setting to 0")
-        self.params.qubit.n_echo(0)
-
-        try:
-            sweep = T1Program()
-            logger.debug("Sweep created, running measurement")
-            loc, da = run_and_save_sweep(sweep, "data", self.name)
-            logger.info("Measurement complete")
-            return loc
-        finally:
-            # Restore n_echo value
-            if self.old_n_echo is not None:
-                logger.debug(f"Restoring n_echo to {self.old_n_echo}")
-                self.params.qubit.n_echo(self.old_n_echo)
+        sweep = T1Program()
+        logger.debug("Sweep created, running measurement")
+        loc, da = run_and_save_sweep(sweep, "data", self.name)
+        logger.info("Measurement complete")
+        return loc
 
     def _load_data_qick(self):
         path = self.data_loc / "data.ddh5"
