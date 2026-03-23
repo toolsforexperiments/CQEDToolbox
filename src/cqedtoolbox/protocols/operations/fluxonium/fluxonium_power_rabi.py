@@ -4,8 +4,6 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 from cqedtoolbox.fitfuncs.resonators import HangerResponseBruno
 from scipy.optimize import curve_fit
-from scipy.signal import find_peaks
-from sklearn.cluster import KMeans
 
 plt.switch_backend("agg")
 
@@ -66,99 +64,84 @@ def _pe_rabi_after_pulse(EC, EL, EJ, flux_ext, f_drive_GHz, V_qubit_volt, t_nsec
     return P_e_after
 
 
-def _find_state_centers(sig_2d):
-    """Find |0> and |1> centers using clustering."""
-
-    sig_flat = sig_2d.reshape(-1)
-    X = np.column_stack([sig_flat.real, sig_flat.imag])
-    kmeans = KMeans(n_clusters=2, n_init=20, random_state=0).fit(X)
-    centers = kmeans.cluster_centers_
-    z0 = centers[0, 0] + 1j * centers[0, 1]
-    z1 = centers[1, 0] + 1j * centers[1, 1]
-    return z0, z1
-
-
-def _project_to_prob(signals_1d, z0, z1):
-    """Using this axis gives better SNR for isotropic noise (most common for fluxonium) than fitting with real, imaginary or magnitude axis."""
-
-    signals_1d = np.asarray(signals_1d)
-    axis = z1 - z0
-    t = np.real((signals_1d - z0) * np.conj(axis)) / (np.abs(axis) ** 2)
-    return np.clip(t, 0, 1)
-
-
-def _fit_sin2_and_quality(voltage_1d, p):
+def _fit_complex_rabi(voltage_1d, signal_1d):
     """
-    Fit the probability projection p(V) = B + A * sin^2(k V + phi), then return V_pi = pi / (2k).
-    Assumptions:
-      - The scan span contains at most ~4 peaks of p(V), best for 2 to 3 peaks.
-    Returns V_pi in same units as voltage_1d.
+    Fit averaged complex signal directly with
+        S(V) = C + D * cos(omega * V + phi)
+    where C and D are complex, omega and phi are real.
+    Returns
+    v_pi : float
+        Pi-pulse amplitude in same units as voltage_1d.Since p(V) ~ sin^2(kV+phi0), so V_pi = pi / (2k) = pi / omega.
+    fit_dict : dict
+        Fitted parameters and a simple residual-based quality metric.
     """
 
     v = np.asarray(voltage_1d, dtype=float)
-    p = np.asarray(p, dtype=float)
-    m = np.isfinite(v) & np.isfinite(p)
+    s = np.asarray(signal_1d, dtype=np.complex128)
+
+    m = np.isfinite(v) & np.isfinite(s.real) & np.isfinite(s.imag)
     v = v[m]
-    p = p[m]
+    s = s[m]
+
     order = np.argsort(v)
     v = v[order]
-    p = p[order]
+    s = s[order]
+
     span = float(v[-1] - v[0])
+    C0 = np.mean(s)
+    D0 = 0.5 * (np.max(np.abs(s - C0)) + np.std(s))
+    D0 = max(float(np.real(D0)), 1e-6)
+    omega_min = (0.8 * np.pi) / span
+    omega_max = (8.4 * np.pi) / span
+    omega0 = (4.0 * np.pi) / span
 
-    def sin2(V, A, k, phi, B):
-        return B + A * (np.sin(k * V + phi) ** 2)
+    def model_concat(V, c_re, c_im, d_re, d_im, omega, phi):
+        C = c_re + 1j * c_im
+        D = d_re + 1j * d_im
+        y = C + D * np.cos(omega * V + phi)
+        return np.concatenate([y.real, y.imag])
 
-    pmin = float(np.min(p))
-    pmax = float(np.max(p))
-    A0 = float(np.clip(pmax - pmin, 1e-3, 1.0))
-    B0 = float(np.clip(np.median(p), 0.0, 1.0))
-    n = v.size
-    w = max(5, n // 25)
-    if w % 2 == 0:
-        w += 1
-    ps = np.convolve(p, np.ones(w) / w, mode="same")
-    prom = 0.05 * float(np.ptp(ps)) if np.ptp(ps) > 0 else 0.0
-    peaks, _ = find_peaks(ps, prominence=prom)
-
-    if peaks.size >= 2:
-        peaks = np.sort(peaks)
-        vp = v[peaks[:4]]
-        dV = float(np.median(np.diff(vp))) if vp.size >= 3 else float(vp[1] - vp[0])
-        k_peak = (np.pi / dV) if (np.isfinite(dV) and dV > 0) else None
-    else:
-        k_peak = None
-    k_max = (4.2 * np.pi) / span
-    k_min = (0.4 * np.pi) / span
-    k_base = k_peak if (k_peak is not None and np.isfinite(k_peak)) else (2.0 * np.pi / span)
-    k_base = float(np.clip(k_base, k_min, k_max))
-
-    bounds_lo = (0.0, k_min, -np.pi, 0.0)
-    bounds_hi = (1.0, k_max,  np.pi, 1.0)
-    phi_guesses = (0.0, np.pi / 4, np.pi / 2, -np.pi / 4)
-    k_scales = (1.0, 0.8, 1.2, 0.6, 1.4)
+    ydata = np.concatenate([s.real, s.imag])
+    p0 = [float(C0.real), float(C0.imag), float(D0), 0.0, float(np.clip(omega0, omega_min, omega_max)), 0.0]
+    bounds_lo = [-np.inf, -np.inf, -np.inf, -np.inf, omega_min, -np.pi]
+    bounds_hi = [ np.inf,  np.inf,  np.inf,  np.inf, omega_max,  np.pi]
 
     best = None
-    for ph0 in phi_guesses:
-        for s in k_scales:
-            k0 = float(np.clip(k_base * s, k_min, k_max))
-            p0 = (A0, k0, ph0, B0)
-            try:
-                popt, _ = curve_fit(sin2, v, p, p0=p0, bounds=(bounds_lo, bounds_hi), maxfev=40000)
-                resid = p - sin2(v, *popt)
-                sse = float(np.sum(resid * resid))
-                if (best is None) or (sse < best[0]):
-                    best = (sse, popt)
-            except Exception:
-                continue
+    for phi0 in (0.0, np.pi/4, np.pi/2, -np.pi/4, -np.pi/2):
+        p0_try = p0.copy()
+        p0_try[-1] = phi0
+        try:
+            popt, _ = curve_fit(model_concat, v, ydata, p0=p0_try, bounds=(bounds_lo, bounds_hi), maxfev=50000)
+            yfit = model_concat(v, *popt)
+            resid = ydata - yfit
+            sse = float(np.sum(resid**2))
+            if (best is None) or (sse < best[0]):
+                best = (sse, popt)
+        except Exception:
+            continue
 
-    A_fit, k_fit, phi_fit, B_fit = best[1]
-    v_pi = np.pi / (2.0 * k_fit)
+    _, popt = best
+    c_re, c_im, d_re, d_im, omega_fit, phi_fit = popt
+    C_fit = c_re + 1j * c_im
+    D_fit = d_re + 1j * d_im
+    v_pi = float(np.pi / omega_fit)
     v_pi = float(np.clip(v_pi, span / 100.0, 2.0 * span))
+
+    yfit = C_fit + D_fit * np.cos(omega_fit * v + phi_fit)
+    resid_complex = s - yfit
+    resid_rms = float(np.sqrt(np.mean(np.abs(resid_complex)**2)))
+    amp = float(np.abs(D_fit))
+    snr_like = float(amp / resid_rms) if resid_rms > 0 else np.nan
+
     fit_dict = {
-        "A": float(A_fit),
-        "k": float(k_fit),
+        "C_re": float(C_fit.real),
+        "C_im": float(C_fit.imag),
+        "D_re": float(D_fit.real),
+        "D_im": float(D_fit.imag),
+        "omega": float(omega_fit),
         "phi": float(phi_fit),
-        "B": float(B_fit),
+        "resid_rms": resid_rms,
+        "snr_like": snr_like,
     }
     return v_pi, fit_dict
 
@@ -288,43 +271,41 @@ class FluxoniumPowerRabi(ProtocolOperation):
     def analyze(self):
         """
         Analyze Rabi-amplitude sweep and extract π-pulse amplitude vs flux.
+
         Method:
         1) Average over repetitions to get one complex mean point per (flux, V).
-        2) Estimate the two readout state centers (z0, z1) using clustering.
-        3) Project mean IQ points onto the z0→z1 axis to obtain a proxy probability p(V) (This method gives the best snr for isotropic noise).
-        4) Extract Vπ from fitting the probability feature p(V) with sine square.
+        2) Fit the averaged complex signal directly with a complex cosine.
+        3) Extract Vπ from the oscillation period.
         """
-         
+
         signals = self.dependents["signal"]
-        voltage = self.independents["voltages"][0,:,:]
-        S = np.mean(signals, axis=0)
+        voltage = self.independents["voltages"][0, :, :]
+        S = np.mean(signals, axis=0)   # shape: (n_flux, n_V)
+
         n_flux, n_V = S.shape
         V_grid = voltage
+
         pi_voltages = np.full(n_flux, np.nan)
         snr_flux = np.full(n_flux, np.nan)
         fit_results = [None] * n_flux
 
         for flux_idx in range(n_flux):
             sig_1d = S[flux_idx]
-            sig_2d = signals[:,flux_idx,:]
-            z0, z1 = _find_state_centers(sig_2d)
-            p = _project_to_prob(sig_1d, z0, z1)
-            pi_voltages[flux_idx], fit_results[flux_idx] = _fit_sin2_and_quality(V_grid[flux_idx], p)
-            
-            axis = z1 - z0
-            sig_flat = sig_2d.reshape(-1)
-            X = np.column_stack([sig_flat.real, sig_flat.imag])
-            km = KMeans(n_clusters=2, n_init=20, random_state=0).fit(X)
-            labels = km.labels_
-            den = np.abs(axis)**2
-            t = np.real((sig_flat - z0) * np.conj(axis)) / den
-            t0, t1 = t[labels == 0], t[labels == 1]
-            sigma = np.sqrt(0.5*(np.std(t0)**2 + np.std(t1)**2))
-            snr_flux[flux_idx] = (1.0 / (4.0 * sigma)) if sigma > 0 else np.nan
+
+            try:
+                pi_voltages[flux_idx], fit_results[flux_idx] = _fit_complex_rabi(
+                    V_grid[flux_idx], sig_1d
+                )
+                snr_flux[flux_idx] = fit_results[flux_idx]["snr_like"]
+            except Exception as e:
+                logger.warning(f"Complex Rabi fit failed at flux index {flux_idx}: {e}")
+                pi_voltages[flux_idx] = np.nan
+                snr_flux[flux_idx] = np.nan
+                fit_results[flux_idx] = None
 
         self.pi_power_vs_flux = pi_voltages
         self.snr = snr_flux
-        self.fit_results = np.asarray(fit_results)
+        self.fit_results = np.asarray(fit_results, dtype=object)
 
         with DatasetAnalysis(self.data_loc, self.name) as ds:
             ds.add(
@@ -334,7 +315,7 @@ class FluxoniumPowerRabi(ProtocolOperation):
                 fit_results=self.fit_results,
             )
             fig, ax = plt.subplots()
-            ax.plot(self.independents["flux"][0,:,0], self.pi_power_vs_flux, "o-")
+            ax.plot(self.independents["flux"][0, :, 0], self.pi_power_vs_flux, "o-")
             ax.set_xlabel("Flux (rad)")
             ax.set_ylabel("Pi pulse amplitude (V)")
             ax.set_title("Extracted π pulse amplitude vs flux")
