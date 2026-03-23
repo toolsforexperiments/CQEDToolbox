@@ -291,17 +291,8 @@ class FluxoniumPowerRabi(ProtocolOperation):
 
         for flux_idx in range(n_flux):
             sig_1d = S[flux_idx]
-
-            try:
-                pi_voltages[flux_idx], fit_results[flux_idx] = _fit_complex_rabi(
-                    V_grid[flux_idx], sig_1d
-                )
-                snr_flux[flux_idx] = fit_results[flux_idx]["snr_like"]
-            except Exception as e:
-                logger.warning(f"Complex Rabi fit failed at flux index {flux_idx}: {e}")
-                pi_voltages[flux_idx] = np.nan
-                snr_flux[flux_idx] = np.nan
-                fit_results[flux_idx] = None
+            pi_voltages[flux_idx], fit_results[flux_idx] = _fit_complex_rabi(V_grid[flux_idx], sig_1d)
+            snr_flux[flux_idx] = fit_results[flux_idx]["snr_like"]
 
         self.pi_power_vs_flux = pi_voltages
         self.snr = snr_flux
