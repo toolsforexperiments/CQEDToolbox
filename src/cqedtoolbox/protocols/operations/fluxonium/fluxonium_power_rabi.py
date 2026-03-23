@@ -317,72 +317,67 @@ class FluxoniumPowerRabi(ProtocolOperation):
 
     def evaluate(self) -> OperationStatus:
         """
-        Final evaluation: determine quality of extracted π-pulse amplitude vs flux.
-        Criteria:
-        1) Edge avoidance (and finite): Vπ not at scan edges.
-        2) Readout quality: SNR at each flux point must be good often enough.
-        3) Smoothness: Vπ(Φ) should be reasonably smooth on the good points.
+        Final evaluation using only:
+        1) SNR quality of the direct complex Rabi fit
+        2) Smoothness of extracted pi-power vs flux on SNR-good points
+
+        Designed to catch the failure mode where the two IQ clusters are too close:
+        the oscillation becomes weak (low SNR) and the extracted pi values become jagged.
         """
 
         if not len(self.pi_power_vs_flux):
             self.report_output = ["Empty π-pulse result."]
             return OperationStatus.FAILURE
 
-        vmin = np.nanmin(self.independents["voltages"][0, :, :], axis=1)
-        vmax = np.nanmax(self.independents["voltages"][0, :, :], axis=1)
-        scan_span = vmax - vmin
-
         GOOD_FRAC_MIN = 0.80 # minimum fraction of flux points that must have good Vπ extraction (not edge/finite and good SNR) for overall success
-        EDGE_FRAC = 0.05  # minimum distance from edges as fraction of scan span for a point to be considered edge-good
         JUMP_FRAC = 0.40
         JUMP_RATE_MAX = 0.20
 
-        edge_bad = (
-            (self.pi_power_vs_flux <= vmin + EDGE_FRAC * scan_span)
-            | (self.pi_power_vs_flux >= vmax - EDGE_FRAC * scan_span)
-            | ~np.isfinite(self.pi_power_vs_flux)
-        )
-
         snr_bad = (
             ~np.isfinite(self.snr)
+            | ~np.isfinite(self.pi_power_vs_flux)
             | (self.snr < self.SNR_THRESHOLD)
         )
-
-        good = (~edge_bad) & (~snr_bad)
+        good = ~snr_bad
         good_frac = float(np.mean(good))
 
         pi_g = self.pi_power_vs_flux[good]
         if pi_g.size >= 3:
             d = np.abs(np.diff(pi_g))
             scale = np.maximum(np.abs(pi_g[:-1]), np.abs(pi_g[1:]))
-            jump_rate = np.mean(d > JUMP_FRAC * scale)
+            scale = np.maximum(scale, 1e-12)
+            jump_rate = float(np.mean(d > JUMP_FRAC * scale))
             smooth_pass = jump_rate <= JUMP_RATE_MAX
         else:
             jump_rate = np.nan
-            smooth_pass = True
-        
+            smooth_pass = False
+
         finite_frac = float(np.mean(np.isfinite(self.pi_power_vs_flux)))
-        edge_good_frac = float(np.mean(~edge_bad))
         snr_good_frac = float(np.mean(~snr_bad))
         snr_med = float(np.nanmedian(self.snr)) if np.any(np.isfinite(self.snr)) else np.nan
 
         self.report_output = [(
             "## Rabi π-pulse extraction\n"
             f"Flux points: {len(self.pi_power_vs_flux)}\n"
-            f"Vπ finite fraction: {finite_frac:.2%}\n\n"
-            f"Edge-good fraction (±{EDGE_FRAC:.0%}): {edge_good_frac:.2%}\n"
+            f"Vπ finite fraction: {finite_frac:.2%}\n"
             f"SNR-good fraction (>= {self.SNR_THRESHOLD}): {snr_good_frac:.2%}\n"
-            f"Good fraction (edge-good & SNR-good): {good_frac:.2%}\n"
+            f"Good fraction: {good_frac:.2%}\n"
             f"Median SNR: {snr_med if np.isfinite(snr_med) else 'n/a'}\n"
-            f"Jump rate (good points): {jump_rate if np.isfinite(jump_rate) else 'n/a'}\n"
+            f"Jump rate (SNR-good points): {jump_rate if np.isfinite(jump_rate) else 'n/a'}\n"
         )]
 
         if (good_frac >= GOOD_FRAC_MIN) and smooth_pass:
             return OperationStatus.SUCCESS
 
         if good_frac < GOOD_FRAC_MIN:
-            logger.warning("π extraction failed: not enough good flux points (edge/finite/SNR).")
-        if not smooth_pass:
-            logger.warning("π extraction warning: Vπ vs flux unstable on good points.")
+            logger.warning(
+                f"Power Rabi failed: only {good_frac:.1%} of flux points passed SNR threshold "
+                f"{self.SNR_THRESHOLD}."
+            )
+        elif not smooth_pass:
+            logger.warning(
+                f"Power Rabi failed: extracted π-pulse amplitudes are too jagged "
+                f"(jump rate {jump_rate:.2f} > {JUMP_RATE_MAX:.2f})."
+            )
 
         return OperationStatus.FAILURE
