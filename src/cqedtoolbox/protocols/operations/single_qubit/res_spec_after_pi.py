@@ -1,4 +1,5 @@
 import logging
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import numpy as np
@@ -12,7 +13,8 @@ from labcore.measurement.sweep import sweep_parameter
 from labcore.measurement.record import record_as
 from labcore.data.datadict_storage import datadict_from_hdf5
 
-from labcore.protocols.base import ProtocolOperation, OperationStatus, serialize_fit_params, ParamImprovement
+from labcore.protocols.base import (ProtocolOperation, OperationStatus, serialize_fit_params,
+                                    CorrectionParameter, CheckResult, EvaluateResult)
 from cqedtoolbox.protocols.parameters import (
     Repetition,
     ResonatorSpecSteps,
@@ -22,7 +24,7 @@ from cqedtoolbox.protocols.parameters import (
     ReadoutLength,
     Detuning
 )
-from cqedtoolbox.measurement_lib.qick.single_transmon_v2 import FreqSweepProgram
+from cqedtoolbox.measurement_lib.qick.single_transmon_v2 import FreqSweepProgram, ResProbeProgram
 
 from cqedtoolbox.fitfuncs.resonators import HangerResponseBruno
 from cqedtoolbox.protocols.operations.single_qubit.res_spec import SyntheticHangerResonatorData
@@ -30,10 +32,46 @@ from cqedtoolbox.protocols.operations.single_qubit.res_spec import SyntheticHang
 
 logger = logging.getLogger(__name__)
 
+_EXCLUDED_FIT_PARAMS = {"transmission_slope", "phase_slope", "phase_offset"}
+
+
+@dataclass
+class ResSpecAfterPiSNRThreshold(CorrectionParameter):
+    name: str = field(default="res_spec_after_pi_snr_threshold", init=False)
+    description: str = field(default="Minimum SNR for a successful resonator fit", init=False)
+
+    def _qick_getter(self):
+        return self.params.corrections.res_spec_after_pi.snr()
+
+    def _qick_setter(self, value):
+        self.params.corrections.res_spec_after_pi.snr(value)
+
+
+@dataclass
+class ResSpecAfterPiMaxFitParamError(CorrectionParameter):
+    name: str = field(default="res_spec_after_pi_max_fit_param_error", init=False)
+    description: str = field(default="Max allowed fractional fit parameter error (e.g. 1.0 = 100%)", init=False)
+
+    def _qick_getter(self):
+        return self.params.corrections.res_spec_after_pi.max_fit_param_error()
+
+    def _qick_setter(self, value):
+        self.params.corrections.res_spec_after_pi.max_fit_param_error(value)
+
+
+@dataclass
+class DetuningThreshold(CorrectionParameter):
+    name: str = field(default="res_spec_after_pi_detuning_threshold", init=False)
+    description: str = field(default="Minimum Chi to consider the dispersive shift valid (MHz)", init=False)
+
+    def _qick_getter(self):
+        return self.params.corrections.res_spec_after_pi.detuning_threshold()
+
+    def _qick_setter(self, value):
+        self.params.corrections.res_spec_after_pi.detuning_threshold(value)
+
 
 class ResonatorSpectroscopyAfterPi(ProtocolOperation):
-
-    SNR_THRESHOLD = 2
 
     def __init__(self, params):
         super().__init__()
@@ -50,7 +88,16 @@ class ResonatorSpectroscopyAfterPi(ProtocolOperation):
             detuning=Detuning(params)
         )
 
-        self.condition = f"Success if both measurements (before and after pi) have SNR bigger than the current threshold of {self.SNR_THRESHOLD}"
+        self._register_correction_params(
+            snr_threshold=ResSpecAfterPiSNRThreshold(params),
+            max_fit_param_error=ResSpecAfterPiMaxFitParamError(params),
+            detuning_threshold=DetuningThreshold(params),
+        )
+
+        self._register_check("quality_check_before", self._check_quality_before, None)
+        self._register_check("quality_check_after", self._check_quality_after, None)
+        self._register_check("detuning_check", self._check_detuning, None)
+        self._register_success_update(self.detuning, lambda: self.chi)
 
         # Data for before measurement
         self.data_loc_before: Path | None = None
@@ -128,7 +175,7 @@ class ResonatorSpectroscopyAfterPi(ProtocolOperation):
         logger.info("Before pi measurement complete at %s", loc_before)
 
         # Measure after pi
-        sweep_after = FreqSweepProgram()
+        sweep_after = ResProbeProgram()
         logger.debug("Sweep created for after pi, running measurement")
         loc_after, da_after = run_and_save_sweep(sweep_after, "data", f"{self.name}_after")
         logger.info("After pi measurement complete at %s", loc_after)
@@ -276,71 +323,70 @@ class ResonatorSpectroscopyAfterPi(ProtocolOperation):
             image_path_combined = ds._new_file_path(ds.savefolders[1], f"{self.name}_combined", suffix="png")
             self.figure_paths.append(image_path_combined)
 
-    def evaluate(self) -> OperationStatus:
-        """
-        Evaluate if both measurements were successful and update chi.
-        Success criteria: Both before and after measurements have SNR above threshold.
-        """
+    def _check_fit_quality(self, snr, fit_result, check_name) -> CheckResult:
+        threshold = self.snr_threshold()
+        snr_passed = snr >= threshold
+
+        max_error = self.max_fit_param_error()
+        bad_params = []
+        for pname, param in fit_result.params.items():
+            if pname in _EXCLUDED_FIT_PARAMS:
+                continue
+            if param.stderr is None:
+                bad_params.append(f"{pname}(no stderr)")
+            elif param.value == 0 or abs(param.stderr / param.value) > max_error:
+                pct = abs(param.stderr / param.value) * 100 if param.value != 0 else float("inf")
+                bad_params.append(f"{pname}({pct:.0f}%)")
+
+        passed = snr_passed and len(bad_params) == 0
+        parts = [f"SNR={snr:.3f} (threshold={threshold:.3f})"]
+        if bad_params:
+            parts.append(f"high-error params: {', '.join(bad_params)}")
+        return CheckResult(check_name, passed, "; ".join(parts))
+
+    def _check_quality_before(self) -> CheckResult:
+        return self._check_fit_quality(self.snr_before, self.fit_result_before, "quality_check_before")
+
+    def _check_quality_after(self) -> CheckResult:
+        return self._check_fit_quality(self.snr_after, self.fit_result_after, "quality_check_after")
+
+    def _check_detuning(self) -> CheckResult:
+        threshold = self.detuning_threshold()
+        passed = abs(self.chi) >= threshold
+        return CheckResult(
+            "detuning_check", passed,
+            f"χ={self.chi:.3f} MHz (abs={abs(self.chi):.3f}, threshold={threshold:.3f}); "
+            f"f_0 before={self.f0_before:.3f} MHz, f_0 after={self.f0_after:.3f} MHz"
+        )
+
+    def correct(self, result: EvaluateResult) -> EvaluateResult:
+        # Pull figures before super() auto-appends the last one.
+        # figure_paths order after analyze(): [0]=before, [1]=after, [2]=combined
+        plot_before = self.figure_paths[0].resolve() if len(self.figure_paths) >= 1 else None
+        plot_after  = self.figure_paths[1].resolve() if len(self.figure_paths) >= 2 else None
+        plot_combined = self.figure_paths[2].resolve() if len(self.figure_paths) >= 3 else None
+        self.figure_paths.clear()  # prevent auto-append
+
         header = (f"## Resonator Spectroscopy Before/After Pi\n"
-                  f"Measured resonator spectroscopy for frequencies: {self.start_freq():.3f}-{self.end_freq():.3f} MHz with a current SNR threshold of {self.SNR_THRESHOLD}\n"
+                  f"Frequencies: {self.start_freq():.3f}–{self.end_freq():.3f} MHz\n"
                   f"Data Path Before: `{self.data_loc_before}`\n"
                   f"Data Path After: `{self.data_loc_after}`\n\n")
+        self.report_output.extend([header, plot_combined])
 
-        # Get the combined plot (last one added)
-        plot_combined = self.figure_paths[2].resolve()
-        plot_before = self.figure_paths[0].resolve()
-        plot_after = self.figure_paths[1].resolve()
+        result = super().correct(result)  # adds check table; no auto-figure since list is empty
 
-        # Check if both measurements have SNR above threshold
-        if self.snr_before >= self.SNR_THRESHOLD and self.snr_after >= self.SNR_THRESHOLD:
-            logger.info(f"Both measurements successful. Before SNR: {self.snr_before:.3f}, After SNR: {self.snr_after:.3f}")
+        self.report_output.append(
+            f"**Detuning (χ): {self.chi:.3f} MHz** "
+            f"(f_0 before: {self.f0_before:.3f} MHz, f_0 after: {self.f0_after:.3f} MHz)\n\n"
+        )
 
-            old_value = self.detuning()
-            new_value = self.chi
+        self.report_output.extend([
+            f"**Before Pi Measurement (SNR: {self.snr_before:.3f}, f_0: {self.f0_before:.3f} MHz):**\n"
+            f"```\n{str(self.fit_result_before.lmfit_result.fit_report())}\n```\n\n",
+            plot_before,
+            f"**After Pi Measurement (SNR: {self.snr_after:.3f}, f_0: {self.f0_after:.3f} MHz):**\n"
+            f"```\n{str(self.fit_result_after.lmfit_result.fit_report())}\n```\n\n",
+            plot_after,
+        ])
 
-            logger.info(f"Updating chi from {old_value} to {new_value}")
-            self.detuning(new_value)
-
-            self.improvements = [ParamImprovement(old_value, new_value, self.detuning)]
-
-            msg_main = (f"### Fit was **SUCCESSFUL**\n"
-                       f"Both measurements have SNR above threshold of {self.SNR_THRESHOLD}\n"
-                       f"Before Pi SNR: {self.snr_before:.3f}, f_0: {self.f0_before:.3f} MHz\n"
-                       f"After Pi SNR: {self.snr_after:.3f}, f_0: {self.f0_after:.3f} MHz\n"
-                       f"{self.detuning.name} shift: {old_value:.3f} -> {new_value:.3f} MHz\n\n"
-                       f"**Combined Plot:**\n")
-
-            msg_details = (f"\n**Before Pi Measurement:**\n"
-                          f"```\n{str(self.fit_result_before.lmfit_result.fit_report())}\n```\n\n")
-
-            msg_after = (f"**After Pi Measurement:**\n"
-                        f"```\n{str(self.fit_result_after.lmfit_result.fit_report())}\n```\n\n")
-
-            self.report_output = [header, msg_main, plot_combined, msg_details, plot_before, msg_after, plot_after]
-
-            return OperationStatus.SUCCESS
-
-        # At least one measurement failed
-        logger.info(f"At least one measurement failed SNR threshold. Before: {self.snr_before:.3f}, After: {self.snr_after:.3f}")
-
-        failed_measurements = []
-        if self.snr_before < self.SNR_THRESHOLD:
-            failed_measurements.append(f"Before Pi (SNR: {self.snr_before:.3f})")
-        if self.snr_after < self.SNR_THRESHOLD:
-            failed_measurements.append(f"After Pi (SNR: {self.snr_after:.3f})")
-
-        msg_main = (f"### Fit was **UNSUCCESSFUL**\n"
-                   f"Failed measurements: {', '.join(failed_measurements)}\n"
-                   f"Threshold: {self.SNR_THRESHOLD}\n"
-                   f"NO value has been changed.\n\n"
-                   f"**Combined Plot:**\n")
-
-        msg_details = (f"\n**Before Pi Measurement (SNR: {self.snr_before:.3f}):**\n"
-                      f"```\n{str(self.fit_result_before.lmfit_result.fit_report())}\n```\n\n")
-
-        msg_after = (f"**After Pi Measurement (SNR: {self.snr_after:.3f}):**\n"
-                    f"```\n{str(self.fit_result_after.lmfit_result.fit_report())}\n```\n\n")
-
-        self.report_output = [header, msg_main, plot_combined, msg_details, plot_before, msg_after, plot_after]
-
-        return OperationStatus.FAILURE
+        return result
