@@ -150,33 +150,6 @@ class EndReadoutFrequency(ProtocolParameterBase):
         active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
         return nestedAttributeFromString(self.params, f"{active_qubit}.scripts.res_spec.end_f")(value)
 
-@dataclass
-class ReadoutLO(ProtocolParameterBase):
-    name: str = field(default="readout_LO", init=False)
-    description: str = field(default="LO frequency of the readout", init=False)
-
-    def _dummy_getter(self):
-        active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
-        return nestedAttributeFromString(self.params, f"{active_qubit}.readout.LO")()
-
-    def _dummy_setter(self, value):
-        active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
-        return nestedAttributeFromString(self.params, f"{active_qubit}.readout.LO")(value)
-    
-
-@dataclass
-class ReadoutIF(ProtocolParameterBase):
-    name: str = field(default="readout_IF", init=False)
-    description: str = field(default="IF frequency of the readout", init=False)
-
-    def _dummy_getter(self):
-        active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
-        return nestedAttributeFromString(self.params, f"{active_qubit}.readout.IF")()
-
-    def _dummy_setter(self, value):
-        active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
-        return nestedAttributeFromString(self.params, f"{active_qubit}.readout.IF")(value)
-
 
 @dataclass
 class Detuning(ProtocolParameterBase):
@@ -294,21 +267,6 @@ class SaturationSpecSteps(ProtocolParameterBase):
 
 
 @dataclass
-class QubitLO(ProtocolParameterBase):
-    name: str = field(default="qubit_LO", init=False)
-    description: str = field(default="LO frequency of the qubit drive", init=False)
-
-    def _dummy_getter(self):
-        active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
-        return nestedAttributeFromString(self.params, f"{active_qubit}.LO")()
-
-    def _dummy_setter(self, value):
-        active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
-        return nestedAttributeFromString(self.params, f"{active_qubit}.LO")(value)
-
-
-
-@dataclass
 class StartSaturationSpecFrequency(ProtocolParameterBase):
     name: str = field(default="start_qubit_frequency", init=False)
     description: str = field(default="Initial frequency of a qubit frequency sweep", init=False)
@@ -351,6 +309,19 @@ class EndSaturationSpecFrequency(ProtocolParameterBase):
         active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
         return nestedAttributeFromString(self.params, f"{active_qubit}.scripts.sat_spec.end_f")(value)
 
+
+@dataclass
+class SaturationSpecDriveGain(ProtocolParameterBase):
+    name: str = field(default="sat_spec_drive_gain", init=False)
+    description: str = field(default="Drive gain for the saturation spectroscopy pump pulse", init=False)
+
+    def _qick_getter(self):
+        active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
+        return nestedAttributeFromString(self.params, f"{active_qubit}.pulses.const.gain")()
+
+    def _qick_setter(self, value):
+        active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
+        return nestedAttributeFromString(self.params, f"{active_qubit}.pulses.const.gain")(value)
 
 
 @dataclass
