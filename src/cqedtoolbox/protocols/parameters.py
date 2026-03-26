@@ -182,7 +182,13 @@ class Delay(ProtocolParameterBase):
         return self.params.msmt_params.delay()
 
     def _dummy_setter(self, value):
-        return self.params.params.msmt_params.delay(value)
+        return self.params.msmt_params.delay(value)
+
+    def _qick_getter(self):
+        return self.params.qick.final_delay()
+
+    def _qick_setter(self, value):
+        self.params.qick.final_delay(value)
 
 @dataclass
 class ResonatorSpecVsGainSteps(ProtocolParameterBase):
