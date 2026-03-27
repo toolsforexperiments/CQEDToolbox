@@ -1,4 +1,5 @@
 import logging
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import numpy as np
@@ -13,7 +14,10 @@ from labcore.measurement.sweep import sweep_parameter
 from labcore.measurement.record import record_as
 from labcore.data.datadict_storage import datadict_from_hdf5
 
-from labcore.protocols.base import ProtocolOperation, OperationStatus, serialize_fit_params, ParamImprovement
+from labcore.protocols.base import (
+    ProtocolOperation, serialize_fit_params,
+    CorrectionParameter, CheckResult, Correction, EvaluateResult,
+)
 from cqedtoolbox.protocols.parameters import (
     Repetition,
     T2RSteps,
@@ -29,15 +33,95 @@ from cqedtoolbox.measurement_lib.qick.single_transmon_v2 import T2RProgram
 logger = logging.getLogger(__name__)
 
 
+# ---------------------------------------------------------------------------
+# CorrectionParameter subclasses
+# ---------------------------------------------------------------------------
+
+@dataclass
+class SNRMinThreshold(CorrectionParameter):
+    name: str = field(default="t2r_snr_min_threshold", init=False)
+    description: str = field(default="Minimum SNR for a valid T2R fit component", init=False)
+
+    def _qick_getter(self): return self.params.corrections.t2r.snr_min()
+    def _qick_setter(self, v): self.params.corrections.t2r.snr_min(v)
+
+
+@dataclass
+class MaxFitParamError(CorrectionParameter):
+    name: str = field(default="t2r_max_fit_param_error", init=False)
+    description: str = field(default="Maximum allowed fractional fit parameter error (e.g. 1.0 = 100%)", init=False)
+
+    def _qick_getter(self): return self.params.corrections.t2r.max_fit_param_error()
+    def _qick_setter(self, v): self.params.corrections.t2r.max_fit_param_error(v)
+
+
+@dataclass
+class AveragingIncreaseFactor(CorrectionParameter):
+    name: str = field(default="t2r_averaging_factor", init=False)
+    description: str = field(default="Factor by which to increase repetitions", init=False)
+
+    def _qick_getter(self): return self.params.corrections.t2r.averaging_factor()
+    def _qick_setter(self, v): self.params.corrections.t2r.averaging_factor(v)
+
+
+@dataclass
+class MaxAveragingIncreases(CorrectionParameter):
+    name: str = field(default="t2r_max_averaging_increases", init=False)
+    description: str = field(default="Maximum number of averaging increases to try", init=False)
+
+    def _qick_getter(self): return int(self.params.corrections.t2r.max_averaging_increases())
+    def _qick_setter(self, v): self.params.corrections.t2r.max_averaging_increases(v)
+
+
+# ---------------------------------------------------------------------------
+# Correction subclasses
+# ---------------------------------------------------------------------------
+
+class IncreaseAveragingCorrection(Correction):
+    name = "increase_averaging"
+    description = "Increase number of repetitions"
+    triggered_by = "quality_check"
+
+    def __init__(self, reps_param, factor_param, max_increases_param):
+        self.reps_param = reps_param
+        self.factor_param = factor_param
+        self.max_increases_param = max_increases_param
+        self._original_reps: int | None = None
+        self._count = 0
+        self._last_change: str = ""
+
+    def can_apply(self) -> bool:
+        return self._count < int(self.max_increases_param())
+
+    def apply(self) -> None:
+        if self._original_reps is None:
+            self._original_reps = int(self.reps_param())
+        factor = self.factor_param()
+        old = int(self.reps_param())
+        new = int(self._original_reps * (factor ** (self._count + 1)))
+        self.reps_param(new)
+        self._count += 1
+        self._last_change = f"reps: {old} → {new}"
+
+    def report_output(self) -> str:
+        return self._last_change
+
+
+# ---------------------------------------------------------------------------
+# Operation
+# ---------------------------------------------------------------------------
+
 class T2ROperation(ProtocolOperation):
 
-    SNR_MIN_THRESHOLD = 2
-    SNR_MAX_THRESHOLD = 50
+    _SIM_T2R = 10.0
+    _SIM_DETUNING = 0.05
+    _SIM_AMP = 0.5
+    _SIM_NOISE_AMP = 0.02
 
     def __init__(self, params):
         super().__init__()
 
-        self.params = params  # Store params for n_echo access
+        self.params = params
 
         self._register_inputs(
             repetitions=Repetition(params),
@@ -51,7 +135,22 @@ class T2ROperation(ProtocolOperation):
             t2r=T2R(params)
         )
 
-        self.condition = f"Success if the SNR of any component (real, imaginary, or magnitude) is between {self.SNR_MIN_THRESHOLD} and {self.SNR_MAX_THRESHOLD}"
+        self._register_correction_params(
+            snr_min_threshold=SNRMinThreshold(params),
+            max_fit_param_error=MaxFitParamError(params),
+            averaging_increase_factor=AveragingIncreaseFactor(params),
+            max_averaging_increases=MaxAveragingIncreases(params),
+        )
+
+        self._increase_averaging = IncreaseAveragingCorrection(
+            self.repetitions,
+            self.averaging_increase_factor,
+            self.max_averaging_increases,
+        )
+
+        self._register_check("quality_check", self._check_quality, self._increase_averaging)
+
+        self._register_success_update(self.t2r, lambda: self._winner_fit.params["tau"].value)
 
         self.independents = {"delays": []}
         self.dependents = {"signal": []}
@@ -62,13 +161,11 @@ class T2ROperation(ProtocolOperation):
         self.snr_re = None
         self.snr_imag = None
         self.snr_mag = None
-
-        self.old_n_echo = None
-
-    _SIM_T2R = 10.0
-    _SIM_DETUNING = 0.05
-    _SIM_AMP = 0.5
-    _SIM_NOISE_AMP = 0.02
+        self._winner_fit = None
+        self._winner_snr = None
+        self._winner_key = None
+        self._winner_name = None
+        self._sorted_components = None
 
     def _measure_dummy(self) -> Path:
         logger.info("Starting dummy T2 Ramsey measurement")
@@ -90,7 +187,6 @@ class T2ROperation(ProtocolOperation):
 
     def _measure_qick(self) -> Path:
         logger.info("Starting qick T2 Ramsey measurement")
-
         sweep = T2RProgram()
         logger.debug("Sweep created, running measurement")
         loc, da = run_and_save_sweep(sweep, "data", self.name)
@@ -143,7 +239,6 @@ class T2ROperation(ProtocolOperation):
         snr_mag = np.abs(amp_mag / (4 * noise_mag))
 
         # Create three separate figures
-        # Real plot
         fig_re, ax_re = plt.subplots()
         ax_re.set_title(f"{fig_title} - Real")
         ax_re.set_xlabel("Delay (μs)")
@@ -152,7 +247,6 @@ class T2ROperation(ProtocolOperation):
         ax_re.plot(delays, fit_curve_re, label="Fit")
         ax_re.legend()
 
-        # Imaginary plot
         fig_imag, ax_imag = plt.subplots()
         ax_imag.set_title(f"{fig_title} - Imaginary")
         ax_imag.set_xlabel("Delay (μs)")
@@ -161,7 +255,6 @@ class T2ROperation(ProtocolOperation):
         ax_imag.plot(delays, fit_curve_imag, label="Fit")
         ax_imag.legend()
 
-        # Magnitude plot
         fig_mag, ax_mag = plt.subplots()
         ax_mag.set_title(f"{fig_title} - Magnitude")
         ax_mag.set_xlabel("Delay (μs)")
@@ -217,131 +310,71 @@ class T2ROperation(ProtocolOperation):
             image_path_mag = ds._new_file_path(ds.savefolders[1], f"{self.name}_mag", suffix="png")
             self.figure_paths.append(image_path_mag)
 
-    def evaluate(self) -> OperationStatus:
-        """
-        Evaluate if the measurement was successful and update the T2R value.
-        Success criteria: At least one component (real, imag, mag) has SNR between min and max thresholds.
-        Uses the component with the highest SNR that is still below the maximum threshold.
-        """
-        # Map component keys to figure paths (in order: real, imag, mag)
-        plot_map = {
-            "re": self.figure_paths[0].resolve(),
-            "imag": self.figure_paths[1].resolve(),
-            "mag": self.figure_paths[2].resolve()
-        }
+            snr_dict = {
+                "Real":      (self.snr_re,   self.fit_result_re,   "re"),
+                "Imaginary": (self.snr_imag, self.fit_result_imag, "imag"),
+                "Magnitude": (self.snr_mag,  self.fit_result_mag,  "mag"),
+            }
+            self._sorted_components = sorted(snr_dict.items(), key=lambda x: x[1][0], reverse=True)
 
-        # Collect all components with their SNR values
-        snr_dict = {
-            "Real": (self.snr_re, self.fit_result_re, "re"),
-            "Imaginary": (self.snr_imag, self.fit_result_imag, "imag"),
-            "Magnitude": (self.snr_mag, self.fit_result_mag, "mag")
-        }
+    def _check_quality(self) -> CheckResult:
+        snr_min = self.snr_min_threshold()
 
-        # Sort by SNR (highest first)
-        sorted_components = sorted(snr_dict.items(), key=lambda x: x[1][0], reverse=True)
-
-        # Filter components that have SNR within the valid range
-        valid_components = [
+        valid = [
             (name, snr, fit, key)
-            for name, (snr, fit, key) in sorted_components
-            if self.SNR_MIN_THRESHOLD <= snr <= self.SNR_MAX_THRESHOLD
+            for name, (snr, fit, key) in self._sorted_components
+            if snr >= snr_min
         ]
 
-        header = (f"## T2 Ramsey (T2R) Measurement\n"
-                  f"Measured T2 Ramsey time with SNR range: {self.SNR_MIN_THRESHOLD} - {self.SNR_MAX_THRESHOLD}\n"
-                  f"Data Path: `{self.data_loc}`\n\n")
-
-        # Check if we have any valid components
-        if valid_components:
-            # Pick the component with highest SNR within valid range
-            winner_name, winner_snr, winner_fit, winner_key = valid_components[0]
-
-            logger.info(f"{winner_name} component has highest valid SNR of {winner_snr:.3f} (within range {self.SNR_MIN_THRESHOLD}-{self.SNR_MAX_THRESHOLD}). Applying new values")
-
-            old_value = self.t2r()
-            new_value = winner_fit.params["tau"].value
-
-            logger.info(f"Updating T2R from {old_value} to {new_value}")
-            self.t2r(new_value)
-
-            self.improvements = [ParamImprovement(old_value, new_value, self.t2r)]
-
-            # Main section with winner
-            msg_main = (f"### **{winner_name} Component (SELECTED)**\n"
-                       f"Fit was **SUCCESSFUL** with {winner_name} SNR of {winner_snr:.3f}\n"
-                       f"{self.t2r.name} shift: {old_value:.3f} -> {new_value:.3f} μs\n"
-                       f"This component was selected because it has the highest SNR within the valid range ({self.SNR_MIN_THRESHOLD}-{self.SNR_MAX_THRESHOLD}).\n\n")
-
-            winner_plot = plot_map[winner_key]
-
-            winner_report = f"**Fit Report:**\n```\n{str(winner_fit.lmfit_result.fit_report())}\n```\n\n"
-
-            # Sections for non-winners
-            other_sections = []
-            for comp_name, (comp_snr, comp_fit, comp_key) in sorted_components:
-                if comp_name == winner_name:
-                    continue  # Skip the winner
-
-                # Determine the reason why this component was not selected
-                if comp_snr > self.SNR_MAX_THRESHOLD:
-                    reason = f"SNR of {comp_snr:.3f} exceeds maximum threshold of {self.SNR_MAX_THRESHOLD}"
-                elif comp_snr < self.SNR_MIN_THRESHOLD:
-                    reason = f"SNR of {comp_snr:.3f} is below minimum threshold of {self.SNR_MIN_THRESHOLD}"
-                else:
-                    reason = f"SNR of {comp_snr:.3f} is valid but lower than {winner_name} (SNR={winner_snr:.3f})"
-
-                other_section = f"### **{comp_name} Component (NOT SELECTED)**\n"
-                other_sections.append(other_section)
-                other_sections.append(plot_map[comp_key])
-                other_sections.append(f"Not used: {reason}\n\n**Fit Report:**\n```\n{str(comp_fit.lmfit_result.fit_report())}\n```\n\n")
-
-            self.report_output = [header, msg_main, winner_plot, winner_report] + other_sections
-
-            return OperationStatus.SUCCESS
-
-        # No valid components - all are either too high or too low
-        best_candidate_name, (best_candidate_snr, best_candidate_fit, best_candidate_key) = sorted_components[0]
-
-        logger.info(f"All components have SNR outside valid range. Best candidate: {best_candidate_name} with SNR {best_candidate_snr:.3f}")
-
-        # Determine failure reason
-        all_too_high = all(snr > self.SNR_MAX_THRESHOLD for _, (snr, _, _) in sorted_components)
-        all_too_low = all(snr < self.SNR_MIN_THRESHOLD for _, (snr, _, _) in sorted_components)
-
-        if all_too_high:
-            failure_reason = f"All components have SNR above maximum threshold of {self.SNR_MAX_THRESHOLD}"
-        elif all_too_low:
-            failure_reason = f"All components have SNR below minimum threshold of {self.SNR_MIN_THRESHOLD}"
+        if valid:
+            self._winner_name, self._winner_snr, self._winner_fit, self._winner_key = valid[0]
+            max_error = self.max_fit_param_error()
+            bad_params = []
+            for pname, param in self._winner_fit.params.items():
+                if param.stderr is None:
+                    bad_params.append(f"{pname}(no stderr)")
+                elif param.value == 0 or abs(param.stderr / param.value) > max_error:
+                    pct = abs(param.stderr / param.value) * 100 if param.value != 0 else float("inf")
+                    bad_params.append(f"{pname}({pct:.0f}%)")
+            passed = len(bad_params) == 0
+            parts = [f"winner={self._winner_name}, SNR={self._winner_snr:.3f} (threshold={snr_min:.1f})"]
+            if bad_params:
+                parts.append(f"high-error params: {', '.join(bad_params)}")
         else:
-            failure_reason = f"No components have SNR within valid range ({self.SNR_MIN_THRESHOLD}-{self.SNR_MAX_THRESHOLD})"
+            self._winner_name, (self._winner_snr, self._winner_fit, self._winner_key) = self._sorted_components[0]
+            passed = False
+            parts = [
+                f"no component with SNR >= {snr_min:.1f}",
+                f"best={self._winner_name}, SNR={self._winner_snr:.3f}",
+            ]
 
-        msg_main = (f"### **{best_candidate_name} Component (Best Candidate)**\n"
-                   f"Fit was **UNSUCCESSFUL** - {failure_reason}\n"
-                   f"Best candidate SNR: {best_candidate_snr:.3f}\n"
-                   f"NO value has been changed.\n\n")
+        return CheckResult("quality_check", passed, "; ".join(parts))
 
-        best_plot = plot_map[best_candidate_key]
-        best_report = f"**Fit Report:**\n```\n{str(best_candidate_fit.lmfit_result.fit_report())}\n```\n\n"
+    def correct(self, result: EvaluateResult) -> EvaluateResult:
+        # Pop all figures before super() auto-appends the last one
+        fig_re   = self.figure_paths.pop(0) if len(self.figure_paths) >= 3 else None
+        fig_imag = self.figure_paths.pop(0) if self.figure_paths else None
+        fig_mag  = self.figure_paths.pop(0) if self.figure_paths else None
+        self.figure_paths.clear()  # prevent auto-append
 
-        # Sections for other components
-        other_sections = []
-        for comp_name, (comp_snr, comp_fit, comp_key) in sorted_components:
-            if comp_name == best_candidate_name:
-                continue  # Skip the best candidate
+        plot_map = {"re": fig_re, "imag": fig_imag, "mag": fig_mag}
 
-            # Determine status
-            if comp_snr > self.SNR_MAX_THRESHOLD:
-                status = f"SNR of {comp_snr:.3f} exceeds maximum threshold of {self.SNR_MAX_THRESHOLD}"
-            elif comp_snr < self.SNR_MIN_THRESHOLD:
-                status = f"SNR of {comp_snr:.3f} is below minimum threshold of {self.SNR_MIN_THRESHOLD}"
-            else:
-                status = f"SNR of {comp_snr:.3f} is within range but not selected"
+        snr_min = self.snr_min_threshold()
+        self.report_output.append(
+            f"## T2 Ramsey (T2R) Measurement\n"
+            f"Measured T2 Ramsey time with SNR threshold: {snr_min:.1f}\n"
+            f"Data Path: `{self.data_loc}`\n\n"
+        )
 
-            other_section = f"### **{comp_name} Component**\n"
-            other_sections.append(other_section)
-            other_sections.append(plot_map[comp_key])
-            other_sections.append(f"{status}\n\n**Fit Report:**\n```\n{str(comp_fit.lmfit_result.fit_report())}\n```\n\n")
+        for i, (comp_name, (comp_snr, comp_fit, comp_key)) in enumerate(self._sorted_components):
+            tag = "(SELECTED)" if i == 0 else "(NOT SELECTED)"
+            self.report_output.append(f"### **{comp_name} Component {tag}**\n")
+            if plot_map.get(comp_key):
+                self.report_output.append(plot_map[comp_key])
+            self.report_output.append(
+                f"SNR={comp_snr:.3f}\n\n"
+                f"**Fit Report:**\n```\n{str(comp_fit.lmfit_result.fit_report())}\n```\n\n"
+            )
 
-        self.report_output = [header, msg_main, best_plot, best_report] + other_sections
-
-        return OperationStatus.FAILURE
+        result = super().correct(result)  # adds check table + success update line
+        return result
