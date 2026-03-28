@@ -12,7 +12,7 @@ from labcore.measurement.sweep import sweep_parameter
 from labcore.measurement.record import record_as
 from labcore.data.datadict_storage import datadict_from_hdf5
 
-from labcore.protocols.base import ProtocolOperation, OperationStatus
+from labcore.protocols.base import ProtocolOperation, OperationStatus, EvaluateResult
 from cqedtoolbox.protocols.parameters import (
     Repetition,
     QubitGain,
@@ -39,8 +39,6 @@ class ReadoutCalibration(ProtocolOperation):
             readout_length=ReadoutLength(params)
         )
         self._register_outputs()  # No output parameters for this measurement
-
-        self.condition = "Success if both ground and excited state measurements complete successfully"
 
         # Data for ground measurement
         self.data_loc_ground: Path | None = None
@@ -226,31 +224,36 @@ class ReadoutCalibration(ProtocolOperation):
                 distance=float(self.distance)
             )
 
-    def evaluate(self) -> OperationStatus:
+    def evaluate(self) -> EvaluateResult:
         """
-        Evaluate if the measurement was successful.
-        Success criteria: Both measurements completed successfully.
+        Overrides the base class to always return SUCCESS with no checks.
+        Readout calibration has no quality criteria — if the measurement runs
+        without error, the data is valid. Actual reporting is done in correct().
         """
-        header = (f"## Readout Calibration\n"
-                  f"Measured single-shot readout for ground and excited states\n"
-                  f"Ground state data: `{self.data_loc_ground}`\n"
-                  f"Excited state data: `{self.data_loc_excited}`\n\n")
+        return EvaluateResult(OperationStatus.SUCCESS)
 
-        plot_iq = self.figure_paths[0].resolve()
+    def correct(self, result: EvaluateResult) -> EvaluateResult:
+        plot_iq = self.figure_paths.pop(0) if self.figure_paths else None
+        self.figure_paths.clear()  # prevent auto-append
 
-        # Calculate readout fidelity information
-        msg_main = (f"### Measurement Complete\n"
-                   f"**Ground State Center:**\n"
-                   f"- I: {self.mean_I_ground:.6f}\n"
-                   f"- Q: {self.mean_Q_ground:.6f}\n\n"
-                   f"**Excited State Center:**\n"
-                   f"- I: {self.mean_I_excited:.6f}\n"
-                   f"- Q: {self.mean_Q_excited:.6f}\n\n"
-                   f"**Distance Between Centers:** {self.distance:.6f}\n\n"
-                   f"The I/Q scatter plot below shows the distribution of single-shot measurements for both states.\n"
-                   f"A larger distance between centers indicates better readout distinguishability.\n\n")
-
-        self.report_output = [header, msg_main, plot_iq]
+        self.report_output.extend([
+            f"## Readout Calibration\n"
+            f"Measured single-shot readout for ground and excited states\n"
+            f"Ground state data: `{self.data_loc_ground}`\n"
+            f"Excited state data: `{self.data_loc_excited}`\n\n",
+            f"### Measurement Complete\n"
+            f"**Ground State Center:**\n"
+            f"- I: {self.mean_I_ground:.6f}\n"
+            f"- Q: {self.mean_Q_ground:.6f}\n\n"
+            f"**Excited State Center:**\n"
+            f"- I: {self.mean_I_excited:.6f}\n"
+            f"- Q: {self.mean_Q_excited:.6f}\n\n"
+            f"**Distance Between Centers:** {self.distance:.6f}\n\n"
+            f"The I/Q scatter plot below shows the distribution of single-shot measurements for both states.\n"
+            f"A larger distance between centers indicates better readout distinguishability.\n\n",
+        ])
+        if plot_iq:
+            self.report_output.append(plot_iq)
 
         logger.info("Readout calibration complete")
-        return OperationStatus.SUCCESS
+        return super().correct(result)
