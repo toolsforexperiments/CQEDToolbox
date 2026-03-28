@@ -308,6 +308,20 @@ class ResonatorSpectroscopyVsGain(ProtocolOperation):
                     freqs, trace_signal, f"Gain = {g}"
                 )
 
+                _excluded = {"transmission_slope", "phase_slope", "phase_offset"}
+                _null_stderr_params = [
+                    pname for pname, param in ret.fit_result.params.items()
+                    if pname not in _excluded and param.stderr is None
+                ]
+                if _null_stderr_params:
+                    logger.warning(
+                        f"Trace {i} (gain={g}): stderr is None for params "
+                        f"{_null_stderr_params} — re-fitting"
+                    )
+                    ret = ResonatorSpectroscopy.add_mag_and_unwind_and_fit(
+                        freqs, trace_signal, f"Gain = {g}"
+                    )
+
                 self.fit_results.append(ret.fit_result)
                 self.snr_values.append(ret.snr)
                 res_f_arr.append(ret.fit_result.params["f_0"].value)

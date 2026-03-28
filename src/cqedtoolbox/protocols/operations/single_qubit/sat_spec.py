@@ -460,7 +460,7 @@ class SaturationSpectroscopy(ProtocolOperation):
         self._register_check(
             "fit_quality",
             self._check_fit_quality,
-            [self._window_shift, self._increase_averaging, self._increase_sampling, self._increase_power],
+            [self._window_shift, self._increase_power,self._increase_averaging, self._increase_sampling],
         )
         self._register_check(
             "single_peak",

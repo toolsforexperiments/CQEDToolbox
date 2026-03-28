@@ -318,6 +318,16 @@ class ResonatorSpectroscopy(ProtocolOperation):
             lambda: self.fit_result.params["f_0"].value,
         )
 
+        self._register_success_update(
+            self.start_frequency,
+            lambda: self.fit_result.params["f_0"].value - 5,
+        )
+
+        self._register_success_update(
+            self.end_frequency,
+            lambda: self.fit_result.params["f_0"].value + 5,
+        )
+
         self.condition = f"Success if the SNR of the measurement is bigger than the current threshold of " # {self.SNR_THRESHOLD}"
 
         self.independents = {"frequencies": []}
@@ -461,5 +471,4 @@ class ResonatorSpectroscopy(ProtocolOperation):
             parts.append(f"high-error params: {', '.join(bad_params)}")
 
         return CheckResult("quality_check", passed, "; ".join(parts))
-
 
