@@ -10,7 +10,8 @@ plt.switch_backend("agg")
 from labcore.analysis import DatasetAnalysis
 from labcore.analysis.fitfuncs.generic import Cosine
 from labcore.measurement.storage import run_and_save_sweep
-from labcore.measurement import sweep_parameter, record_as
+from labcore.measurement import sweep_parameter, record_as, Sweep
+from labcore.data.datagen import PowerRabi as PowerRabiDataGen
 from labcore.data.datadict_storage import datadict_from_hdf5
 
 from labcore.protocols.base import (
@@ -258,20 +259,6 @@ class ShrinkGainRangeCorrection(Correction):
         return f"gain range: [{self._last_new_start:.3f}, {self._last_new_end:.3f}]"
 
 
-# ---------------------------------------------------------------------------
-# Synthetic data helper
-# ---------------------------------------------------------------------------
-
-@dataclass
-class SyntheticPowerRabiData:
-    pi_amp: float
-    noise_amp: float
-
-    def generate(self, gains: float) -> np.complex128:
-        signal = (np.cos(2 * np.pi * gains / (2 * self.pi_amp)) + 2) - 1j * (np.cos(2 * np.pi * gains / (2 * self.pi_amp)) + 2)
-        noise = self.noise_amp * (np.random.randn() + 1j * np.random.randn())
-        return signal + noise
-
 
 # ---------------------------------------------------------------------------
 # Operation
@@ -371,14 +358,9 @@ class PowerRabi(ProtocolOperation):
     def _measure_dummy(self):
         logger.info("Starting dummy power rabi measurement")
         gains = np.linspace(self.start_gain(), self.end_gain(), int(self.steps_gain()))
-        generator = SyntheticPowerRabiData(
-            pi_amp = self._SIM_PI_AMP,
-            noise_amp = self._SIM_NOISE_AMP
-        )
-
-        sweep = sweep_parameter("gains", gains, record_as(generator.generate, "signal"))
+        generator = PowerRabiDataGen(pi_amp=self._SIM_PI_AMP, noise_std=self._SIM_NOISE_AMP)
+        sweep = sweep_parameter("gains", gains) * Sweep(record_as(generator.generate(gains), "signal"))
         loc, _ = run_and_save_sweep(sweep, "data", self.name)
-
         logger.info("Dummy measurement complete")
         return loc
 

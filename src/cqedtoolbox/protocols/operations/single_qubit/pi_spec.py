@@ -10,8 +10,9 @@ plt.switch_backend("agg")
 from labcore.analysis import DatasetAnalysis
 from labcore.analysis.fitfuncs.generic import Gaussian
 from labcore.measurement.storage import run_and_save_sweep
-from labcore.measurement.sweep import sweep_parameter
+from labcore.measurement.sweep import sweep_parameter, Sweep
 from labcore.measurement.record import record_as
+from labcore.data.datagen import Gaussian as GaussianDataGen
 from labcore.data.datadict_storage import datadict_from_hdf5
 
 from labcore.protocols.base import (ProtocolOperation, OperationStatus, serialize_fit_params,
@@ -162,11 +163,8 @@ class PiSpectroscopy(ProtocolOperation):
         frequencies = np.linspace(self.start_freq(), self.end_freq(), int(self.steps()))
         center = (self.start_freq() + self.end_freq()) / 2 + self._SIM_CENTER
 
-        def generate(frequencies):
-            return (self._SIM_AMP * np.exp(-0.5 * ((frequencies - center) / self._SIM_SIGMA) ** 2)
-                    + self._SIM_NOISE_AMP * (np.random.randn() + 1j * np.random.randn()))
-
-        sweep = sweep_parameter("frequencies", frequencies, record_as(generate, "signal"))
+        generator = GaussianDataGen(x0=center, sigma=self._SIM_SIGMA, A=self._SIM_AMP, of=0, noise_std=self._SIM_NOISE_AMP)
+        sweep = sweep_parameter("frequencies", frequencies) * Sweep(record_as(generator.generate(frequencies), "signal"))
         loc, _ = run_and_save_sweep(sweep, "data", self.name)
         logger.info("Dummy measurement complete")
         return loc

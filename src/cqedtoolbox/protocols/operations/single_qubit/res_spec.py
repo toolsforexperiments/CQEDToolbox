@@ -9,7 +9,8 @@ import matplotlib.pyplot as plt
 from labcore.analysis import DatasetAnalysis, FitResult
 from labcore.measurement.storage import run_and_save_sweep
 from labcore.data.datadict_storage import datadict_from_hdf5
-from labcore.measurement import sweep_parameter, record_as
+from labcore.measurement import sweep_parameter, record_as, Sweep
+from labcore.data.datagen import HangerResonator
 
 from labcore.protocols.base import (ProtocolOperation, OperationStatus, serialize_fit_params,
                                     ParamImprovement, CorrectionParameter, CheckResult, Correction)
@@ -36,20 +37,6 @@ class UnwindAndFitRet:
     fig: plt.Figure
     ax: plt.Axes
 
-@dataclass
-class SyntheticHangerResonatorData:
-    f0: float
-    Qc: float
-    Qi: float
-    A: float
-    phi: float
-    noise_amp: float
-    
-    def generate(self, frequencies: ArrayLike) -> ArrayLike:
-        Q_l = 1./(1./self.Qc + 1./self.Qi)
-        Q_e_complex = self.Qc * np.exp(-1j * self.phi)
-        response = self.A * (1 - (Q_l / Q_e_complex) / (1 + 2j * Q_l * (frequencies - self.f0) / self.f0))
-        return response + self.noise_amp * (np.random.randn() + 1j * np.random.randn())
 
 
 @dataclass
@@ -351,19 +338,10 @@ class ResonatorSpectroscopy(ProtocolOperation):
     
     def _measure_dummy(self):
         logger.info("Starting dummy resonator spectroscopy measurement")
-        frequencies = np.linspace(self.start_frequency(), self.end_frequency(), int(self.steps()))
-        generator = SyntheticHangerResonatorData(
-            f0 = self._SIM_F0,
-            Qi = self._SIM_QI,
-            Qc = self._SIM_QC,
-            A = self._SIM_A,
-            phi = self._SIM_PHI,
-            noise_amp = self._SIM_NOISE_AMP
-        )
-
-        sweep = sweep_parameter("frequencies", frequencies + self.readout_lo(), record_as(generator.generate, "signal"))
+        frequencies = np.linspace(self.start_frequency(), self.end_frequency(), int(self.steps())) + self.readout_freq()
+        generator = HangerResonator(f0=self._SIM_F0, Qc=self._SIM_QC, Qi=self._SIM_QI, A=self._SIM_A, phi=self._SIM_PHI, noise_std=self._SIM_NOISE_AMP)
+        sweep = sweep_parameter("frequencies", frequencies) * Sweep(record_as(generator.generate(frequencies), "signal"))
         loc, _ = run_and_save_sweep(sweep, "data", self.name)
-
         logger.info("Dummy measurement complete")
         return loc
 

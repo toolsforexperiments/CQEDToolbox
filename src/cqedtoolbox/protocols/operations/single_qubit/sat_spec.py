@@ -3,9 +3,7 @@ from pathlib import Path
 from dataclasses import dataclass, field
 
 import numpy as np
-from numpy.typing import ArrayLike
 import matplotlib.pyplot as plt
-from scipy.constants import h
 
 plt.switch_backend("agg")
 
@@ -13,8 +11,9 @@ from labcore.analysis import DatasetAnalysis, Fit
 from labcore.analysis.fitfuncs.generic import Lorentzian
 from labcore.measurement.storage import run_and_save_sweep
 from labcore.data.datadict_storage import datadict_from_hdf5
-from labcore.measurement.sweep import sweep_parameter
+from labcore.measurement.sweep import sweep_parameter, Sweep
 from labcore.measurement.record import record_as
+from labcore.data.datagen import Lorentzian as LorentzianDataGen
 
 from labcore.protocols.base import (ProtocolOperation, OperationStatus, serialize_fit_params,
                                     ParamImprovement, CorrectionParameter, CheckResult, Correction,
@@ -359,29 +358,6 @@ class ReducePowerCorrection(Correction):
         return self._last_change
 
 
-# ---------------------------------------------------------------------------
-# Synthetic data helper
-# ---------------------------------------------------------------------------
-
-@dataclass
-class SyntheticSatSpecData:
-    fq: float
-    delta_fr: float
-    f_rabi: float
-    gamma1: float
-    gamma2: float
-    angle: float
-    noise_amp: float
-
-    def generate(self, frequencies: ArrayLike) -> ArrayLike:
-        """Saturation spec model based on Blais circuit qed eqn 127"""
-        signal = 0.5 * self.f_rabi**2 / (
-            self.gamma1 * self.gamma2 + (frequencies - self.fq) ** 2 * self.gamma1 / self.gamma2 + self.f_rabi ** 2
-        )
-        signal_re = signal * np.cos(self.angle) + self.noise_amp * np.random.randn(*frequencies.shape)
-        signal_imag = signal * np.sin(self.angle) + self.noise_amp * np.random.randn(*frequencies.shape)
-        return signal_re + 1j * signal_imag
-
 
 # ---------------------------------------------------------------------------
 # Operation
@@ -390,23 +366,9 @@ class SyntheticSatSpecData:
 class SaturationSpectroscopy(ProtocolOperation):
 
     _DUMMY_F_Q = 5e9
-    _DUMMY_F_R = 7e9
-    _DUMMY_DELTA = _DUMMY_F_R - _DUMMY_F_Q
-
-    _DUMMY_P_IN = 1e-16
-    _DUMMY_G = 50e6
-    _DUMMY_KAPPA_R = 0.2e6
-
-    _DUMMY_T1 = 50e-6
-    _DUMMY_T2 = 50e-6
-    _DUMMY_GAMMA_1 = 1 / _DUMMY_T1
-    _DUMMY_GAMMA_2 = 1 / (np.pi * _DUMMY_T2)
-
-    _DUMMY_OMEGA = 2 * (_DUMMY_G / _DUMMY_DELTA) * np.sqrt(_DUMMY_KAPPA_R * _DUMMY_P_IN / (h * _DUMMY_F_Q))
-    _DUMMY_GAMMA_Q = np.sqrt( (1 / _DUMMY_T2) ** 2 + ((2 * np.pi * _DUMMY_OMEGA) ** 2 * _DUMMY_T1 / _DUMMY_T2) ) / np.pi # blais eq 127
-
+    _DUMMY_GAMMA = 1e6
+    _DUMMY_A = 0.5
     _DUMMY_NOISE_AMP = 0.05
-    _DUMMY_ANGLE = np.pi / 4
 
 
     def __init__(self, params):
@@ -510,30 +472,12 @@ class SaturationSpectroscopy(ProtocolOperation):
         self.dependents["signal"] = data["signal"]["values"]
 
     def _measure_dummy(self) -> Path:
-        """Create synthetic saturation spectroscopy data using a sweep"""
         logger.info("Starting dummy saturation spectroscopy measurement")
-
-        start_f = self.start_freq()
-        end_f = self.end_freq()
-        num_steps = int(self.steps())
-
-        frequencies = np.linspace(start_f, end_f, num_steps)
-
-        generator = SyntheticSatSpecData(
-            fq=self._DUMMY_F_Q,
-            delta_fr=self._DUMMY_DELTA,
-            f_rabi=self._DUMMY_OMEGA,
-            gamma1=self._DUMMY_GAMMA_1,
-            gamma2=self._DUMMY_GAMMA_2,
-            angle=self._DUMMY_ANGLE,
-            noise_amp=self._DUMMY_NOISE_AMP
-        )
-
-        sweep = sweep_parameter('frequencies', frequencies, record_as(generator.generate, 'signal'))
-
+        frequencies = np.linspace(self.start_freq(), self.end_freq(), int(self.steps()))
+        generator = LorentzianDataGen(x0=self._DUMMY_F_Q, gamma=self._DUMMY_GAMMA, A=self._DUMMY_A, of=0, noise_std=self._DUMMY_NOISE_AMP)
+        sweep = sweep_parameter('frequencies', frequencies) * Sweep(record_as(generator.generate(frequencies), 'signal'))
         loc, _ = run_and_save_sweep(sweep, "data", self.name)
-        logger.info("Dummy saturation spectroscopy measurement complete.")
-
+        logger.info("Dummy measurement complete")
         return loc
 
     def _load_data_dummy(self):

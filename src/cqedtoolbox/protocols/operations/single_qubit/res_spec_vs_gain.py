@@ -11,6 +11,7 @@ plt.switch_backend("agg")
 from labcore.analysis import DatasetAnalysis
 from labcore.measurement.storage import run_and_save_sweep
 from labcore.data.datadict_storage import datadict_from_hdf5
+from labcore.data.datagen import HangerResonator
 from labcore.measurement import sweep_parameter
 from labcore.measurement.record import recording, dep, indep
 
@@ -23,7 +24,7 @@ from cqedtoolbox.protocols.parameters import (
     ReadoutGain,
     ReadoutLength, StartReadoutGain, EndReadoutGain, ResonatorSpecSteps, ResonatorSpecVsGainSteps,
 )
-from cqedtoolbox.protocols.operations.single_qubit.res_spec import ResonatorSpectroscopy, SyntheticHangerResonatorData
+from cqedtoolbox.protocols.operations.single_qubit.res_spec import ResonatorSpectroscopy as _RS
 from cqedtoolbox.measurement_lib.qick.single_transmon_v2 import FreqGainSweepProgram
 
 
@@ -34,6 +35,9 @@ logger = logging.getLogger(__name__)
 class ResSpecVsGainSNRThreshold(CorrectionParameter):
     name: str = field(default="res_spec_vs_gain_snr_threshold", init=False)
     description: str = field(default="SNR threshold for low-gain quality check", init=False)
+
+    # def _dummy_getter(self): return 2.0  # hardcoded default for DUMMY mode so analyze() runs without a real params object
+    # def _dummy_setter(self, _): pass
 
     def _qick_getter(self):
         return self.params.corrections.res_spec_vs_gain.snr()
@@ -47,6 +51,9 @@ class ResSpecVsGainMaxFitParamError(CorrectionParameter):
     name: str = field(default="res_spec_vs_gain_max_fit_param_error", init=False)
     description: str = field(default="Max fractional fit parameter error (e.g. 1.0 = 100%)", init=False)
 
+    # def _dummy_getter(self): return 1.0  # hardcoded default for DUMMY mode so analyze() runs without a real params object
+    # def _dummy_setter(self, _): pass
+
     def _qick_getter(self):
         return self.params.corrections.res_spec_vs_gain.max_fit_param_error()
 
@@ -58,6 +65,9 @@ class ResSpecVsGainMaxFitParamError(CorrectionParameter):
 class ResSpecVsGainHighSNRThreshold(CorrectionParameter):
     name: str = field(default="res_spec_vs_gain_high_snr_threshold", init=False)
     description: str = field(default="High SNR threshold — at least one trace must exceed this", init=False)
+
+    # def _dummy_getter(self): return 2.0  # hardcoded default for DUMMY mode so analyze() runs without a real params object
+    # def _dummy_setter(self, _): pass
 
     def _qick_getter(self):
         return self.params.corrections.res_spec_vs_gain.high_snr()
@@ -71,6 +81,9 @@ class ResSpecVsGainRepetitionFactor(CorrectionParameter):
     name: str = field(default="res_spec_vs_gain_repetition_factor", init=False)
     description: str = field(default="Factor by which repetitions are increased on retry", init=False)
 
+    # def _dummy_getter(self): return 2.0  # hardcoded default for DUMMY mode so analyze() runs without a real params object
+    # def _dummy_setter(self, _): pass
+
     def _qick_getter(self):
         return self.params.corrections.res_spec_vs_gain.rep_factor()
 
@@ -82,6 +95,9 @@ class ResSpecVsGainRepetitionFactor(CorrectionParameter):
 class ResSpecVsGainMaxRepetitionIncreases(CorrectionParameter):
     name: str = field(default="res_spec_vs_gain_max_rep_increases", init=False)
     description: str = field(default="Maximum number of repetition increases to attempt", init=False)
+
+    # def _dummy_getter(self): return 3  # hardcoded default for DUMMY mode so analyze() runs without a real params object
+    # def _dummy_setter(self, _): pass
 
     def _qick_getter(self):
         return int(self.params.corrections.res_spec_vs_gain.max_rep_increases())
@@ -203,16 +219,9 @@ class ResonatorSpectroscopyVsGain(ProtocolOperation):
             gains = np.linspace(self.start_gain(), self.end_gain(), self._SIM_N_GAIN_STEPS)
             ret_signal = []
             for i in range(self._SIM_N_GAIN_STEPS):
-                shifted_center = ResonatorSpectroscopy._SIM_F0 + freq_shift_per_gain_unit * i
-                generator = SyntheticHangerResonatorData(
-                    f0=shifted_center,
-                    Qi=ResonatorSpectroscopy._SIM_QI,
-                    Qc=ResonatorSpectroscopy._SIM_QC,
-                    A=ResonatorSpectroscopy._SIM_A,
-                    phi=ResonatorSpectroscopy._SIM_PHI,
-                    noise_amp=ResonatorSpectroscopy._SIM_NOISE_AMP
-                )
-                ret_signal.append(generator.generate(frequencies))
+                shifted_center = _RS._SIM_F0 + freq_shift_per_gain_unit * i
+                generator = HangerResonator(f0=shifted_center, Qc=_RS._SIM_QC, Qi=_RS._SIM_QI, A=_RS._SIM_A, phi=_RS._SIM_PHI, noise_std=_RS._SIM_NOISE_AMP)
+                ret_signal.append(generator.generate(np.atleast_1d(frequencies)))
 
             return gains, ret_signal
 
@@ -304,7 +313,7 @@ class ResonatorSpectroscopyVsGain(ProtocolOperation):
                 folder_name = f"resonator_spec_vs_gain_i={i}_g={g}"
 
                 # Use the static method from ResonatorSpectroscopy
-                ret = ResonatorSpectroscopy.add_mag_and_unwind_and_fit(
+                ret = _RS.add_mag_and_unwind_and_fit(
                     freqs, trace_signal, f"Gain = {g}"
                 )
 
@@ -318,7 +327,7 @@ class ResonatorSpectroscopyVsGain(ProtocolOperation):
                         f"Trace {i} (gain={g}): stderr is None for params "
                         f"{_null_stderr_params} — re-fitting"
                     )
-                    ret = ResonatorSpectroscopy.add_mag_and_unwind_and_fit(
+                    ret = _RS.add_mag_and_unwind_and_fit(
                         freqs, trace_signal, f"Gain = {g}"
                     )
 

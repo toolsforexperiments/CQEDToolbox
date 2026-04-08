@@ -9,8 +9,9 @@ plt.switch_backend("agg")
 
 from labcore.analysis import DatasetAnalysis
 from labcore.measurement.storage import run_and_save_sweep
-from labcore.measurement.sweep import sweep_parameter
+from labcore.measurement.sweep import sweep_parameter, Sweep
 from labcore.measurement.record import record_as
+from labcore.data.datagen import HangerResonator
 from labcore.data.datadict_storage import datadict_from_hdf5
 
 from labcore.protocols.base import (ProtocolOperation, OperationStatus, serialize_fit_params,
@@ -27,7 +28,7 @@ from cqedtoolbox.protocols.parameters import (
 from cqedtoolbox.measurement_lib.qick.single_transmon_v2 import FreqSweepProgram, ResProbeProgram
 
 from cqedtoolbox.fitfuncs.resonators import HangerResponseBruno
-from cqedtoolbox.protocols.operations.single_qubit.res_spec import SyntheticHangerResonatorData
+from cqedtoolbox.protocols.operations.single_qubit.res_spec import ResonatorSpectroscopy as _RS
 
 
 logger = logging.getLogger(__name__)
@@ -126,23 +127,14 @@ class ResonatorSpectroscopyAfterPi(ProtocolOperation):
 
     def _measure_dummy(self) -> Path:
         logger.info("Starting dummy resonator spectroscopy before/after pi measurement")
-        from cqedtoolbox.protocols.operations.single_qubit.res_spec import ResonatorSpectroscopy as _RS
         frequencies = np.linspace(self.start_freq(), self.end_freq(), int(self.steps()))
 
-        gen_before = SyntheticHangerResonatorData(
-            f0=_RS._SIM_F0, Qi=_RS._SIM_QI, Qc=_RS._SIM_QC,
-            A=_RS._SIM_A, phi=_RS._SIM_PHI, noise_amp=_RS._SIM_NOISE_AMP
-        )
-        # signal_before = gen_before.generate(frequencies)
-        sweep_before = sweep_parameter("frequencies", frequencies, record_as(gen_before.generate, "signal"))
+        gen_before = HangerResonator(f0=_RS._SIM_F0, Qc=_RS._SIM_QC, Qi=_RS._SIM_QI, A=_RS._SIM_A, phi=_RS._SIM_PHI, noise_std=_RS._SIM_NOISE_AMP)
+        sweep_before = sweep_parameter("frequencies", frequencies) * Sweep(record_as(gen_before.generate(frequencies), "signal"))
         loc_before, _ = run_and_save_sweep(sweep_before, "data", f"{self.name}_before")
 
-        gen_after = SyntheticHangerResonatorData(
-            f0=_RS._SIM_F0 + self._SIM_CHI, Qi=_RS._SIM_QI, Qc=_RS._SIM_QC,
-            A=_RS._SIM_A, phi=_RS._SIM_PHI, noise_amp=_RS._SIM_NOISE_AMP
-        )
-        # signal_after = gen_after.generate(frequencies)
-        sweep_after = sweep_parameter("frequencies", frequencies, record_as(gen_after.generate, "signal"))
+        gen_after = HangerResonator(f0=_RS._SIM_F0 + self._SIM_CHI, Qc=_RS._SIM_QC, Qi=_RS._SIM_QI, A=_RS._SIM_A, phi=_RS._SIM_PHI, noise_std=_RS._SIM_NOISE_AMP)
+        sweep_after = sweep_parameter("frequencies", frequencies) * Sweep(record_as(gen_after.generate(frequencies), "signal"))
         loc_after, _ = run_and_save_sweep(sweep_after, "data", f"{self.name}_after")
 
         self.data_loc_before = loc_before

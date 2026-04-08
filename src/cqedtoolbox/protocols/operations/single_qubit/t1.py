@@ -10,8 +10,9 @@ plt.switch_backend("agg")
 from labcore.analysis import DatasetAnalysis
 from labcore.analysis.fitfuncs.generic import ExponentialDecay
 from labcore.measurement.storage import run_and_save_sweep
-from labcore.measurement.sweep import sweep_parameter
+from labcore.measurement.sweep import sweep_parameter, Sweep
 from labcore.measurement.record import record_as
+from labcore.data.datagen import ExponentialDecay as ExponentialDecayDataGen
 from labcore.data.datadict_storage import datadict_from_hdf5
 
 from labcore.protocols.base import (
@@ -235,9 +236,8 @@ class T1Operation(ProtocolOperation):
     def _measure_dummy(self) -> Path:
         logger.info("Starting dummy T1 measurement")
         delays = np.linspace(0, 5 * self._SIM_T1, int(self.steps()))
-        signal_gen = lambda delays: (self._SIM_AMP * np.exp(-delays / self._SIM_T1)
-                  + self._SIM_NOISE_AMP * (np.random.randn() + 1j * np.random.randn()))
-        sweep = sweep_parameter("delays", delays, record_as(signal_gen, "signal"))
+        generator = ExponentialDecayDataGen(A=self._SIM_AMP, tau=self._SIM_T1, of=0, noise_std=self._SIM_NOISE_AMP)
+        sweep = sweep_parameter("delays", delays) * Sweep(record_as(generator.generate(delays), "signal"))
         loc, _ = run_and_save_sweep(sweep, "data", self.name)
         logger.info("Dummy measurement complete")
         return loc
