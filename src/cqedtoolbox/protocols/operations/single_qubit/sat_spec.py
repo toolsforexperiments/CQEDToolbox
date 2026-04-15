@@ -1,9 +1,13 @@
 import logging
 from pathlib import Path
 from dataclasses import dataclass, field
+from typing import Any
 
 import numpy as np
 import matplotlib.pyplot as plt
+from numpy.typing import NDArray
+from scipy.constants import h
+
 
 plt.switch_backend("agg")
 
@@ -11,9 +15,9 @@ from labcore.analysis import DatasetAnalysis, Fit
 from labcore.analysis.fitfuncs.generic import Lorentzian
 from labcore.measurement.storage import run_and_save_sweep
 from labcore.data.datadict_storage import datadict_from_hdf5
-from labcore.measurement.sweep import sweep_parameter, Sweep
+from labcore.measurement.sweep import sweep_parameter
 from labcore.measurement.record import record_as
-from labcore.data.datagen import Lorentzian as LorentzianDataGen
+from labcore.data.datagen import DataGen
 
 from labcore.protocols.base import (ProtocolOperation, OperationStatus, serialize_fit_params,
                                     ParamImprovement, CorrectionParameter, CheckResult, Correction,
@@ -39,6 +43,8 @@ class SNRThreshold(CorrectionParameter):
     name: str = field(default="sat_spec_snr_threshold", init=False)
     description: str = field(default="SNR threshold for saturation spectroscopy fit quality", init=False)
 
+    def _dummy_getter(self): return 2.0
+
     def _qick_getter(self):
         return self.params.corrections.sat_spec.snr()
 
@@ -50,6 +56,8 @@ class SNRThreshold(CorrectionParameter):
 class MaxFitParamError(CorrectionParameter):
     name: str = field(default="sat_spec_max_fit_param_error", init=False)
     description: str = field(default="Maximum allowed fractional fit parameter error (e.g. 1.0 = 100%)", init=False)
+
+    def _dummy_getter(self): return 1.0
 
     def _qick_getter(self):
         return self.params.corrections.sat_spec.max_fit_param_error()
@@ -63,6 +71,8 @@ class MaxWindowShifts(CorrectionParameter):
     name: str = field(default="sat_spec_max_window_shifts", init=False)
     description: str = field(default="Number of ±n window shifts to try", init=False)
 
+    def _dummy_getter(self): return 3
+
     def _qick_getter(self):
         return int(self.params.corrections.sat_spec.max_window_shifts())
 
@@ -74,6 +84,8 @@ class MaxWindowShifts(CorrectionParameter):
 class AveragingIncreaseFactor(CorrectionParameter):
     name: str = field(default="sat_spec_averaging_increase_factor", init=False)
     description: str = field(default="Factor by which to increase repetitions", init=False)
+
+    def _dummy_getter(self): return 2.0
 
     def _qick_getter(self):
         return self.params.corrections.sat_spec.averaging_factor()
@@ -87,6 +99,8 @@ class MaxAveragingIncreases(CorrectionParameter):
     name: str = field(default="sat_spec_max_averaging_increases", init=False)
     description: str = field(default="Maximum number of averaging increases to try", init=False)
 
+    def _dummy_getter(self): return 3
+
     def _qick_getter(self):
         return int(self.params.corrections.sat_spec.max_averaging_increases())
 
@@ -98,6 +112,8 @@ class MaxAveragingIncreases(CorrectionParameter):
 class SamplingIncreaseFactor(CorrectionParameter):
     name: str = field(default="sat_spec_sampling_increase_factor", init=False)
     description: str = field(default="Factor by which to increase frequency steps", init=False)
+
+    def _dummy_getter(self): return 2.0
 
     def _qick_getter(self):
         return self.params.corrections.sat_spec.sampling_factor()
@@ -111,6 +127,8 @@ class MaxSamplingIncreases(CorrectionParameter):
     name: str = field(default="sat_spec_max_sampling_increases", init=False)
     description: str = field(default="Maximum number of sampling rate increases to try", init=False)
 
+    def _dummy_getter(self): return 3
+
     def _qick_getter(self):
         return int(self.params.corrections.sat_spec.max_sampling_increases())
 
@@ -122,6 +140,8 @@ class MaxSamplingIncreases(CorrectionParameter):
 class MaxPowerIncreases(CorrectionParameter):
     name: str = field(default="sat_spec_max_power_increases", init=False)
     description: str = field(default="Maximum number of drive power increases to try", init=False)
+
+    def _dummy_getter(self): return 3
 
     def _qick_getter(self):
         return int(self.params.corrections.sat_spec.max_power_increases())
@@ -135,6 +155,8 @@ class PowerIncreaseFactor(CorrectionParameter):
     name: str = field(default="sat_spec_power_increase_factor", init=False)
     description: str = field(default="Multiplicative factor for increasing drive gain (e.g. 1.1 = +10%)", init=False)
 
+    def _dummy_getter(self): return 2.0
+
     def _qick_getter(self):
         return self.params.corrections.sat_spec.power_increase_factor()
 
@@ -146,6 +168,8 @@ class PowerIncreaseFactor(CorrectionParameter):
 class SinglePeakSNRThreshold(CorrectionParameter):
     name: str = field(default="sat_spec_single_peak_snr", init=False)
     description: str = field(default="SNR threshold for detecting a second peak in the fit residuals", init=False)
+
+    def _dummy_getter(self): return 2.0
 
     def _qick_getter(self):
         return self.params.corrections.sat_spec.single_peak_snr()
@@ -159,6 +183,8 @@ class SinglePeakMaxPowerReductions(CorrectionParameter):
     name: str = field(default="sat_spec_single_peak_max_reductions", init=False)
     description: str = field(default="Maximum number of drive power reductions to try", init=False)
 
+    def _dummy_getter(self): return 3
+
     def _qick_getter(self):
         return int(self.params.corrections.sat_spec.single_peak_max_reductions())
 
@@ -170,6 +196,8 @@ class SinglePeakMaxPowerReductions(CorrectionParameter):
 class PowerReductionFactor(CorrectionParameter):
     name: str = field(default="sat_spec_power_reduction_factor", init=False)
     description: str = field(default="Multiplicative factor for reducing drive gain (e.g. 0.9 = -10%)", init=False)
+
+    def _dummy_getter(self): return 0.5
 
     def _qick_getter(self):
         return self.params.corrections.sat_spec.power_reduction_factor()
@@ -357,6 +385,28 @@ class ReducePowerCorrection(Correction):
     def report_output(self) -> str:
         return self._last_change
 
+# ---------------------------------------------------------------------------
+# SatSpec DataGen
+# ---------------------------------------------------------------------------
+
+@dataclass
+class SatSpec(DataGen):
+    fq: float = 5e9
+    f_rabi: float = 1e6
+    gamma1: float = 1e6
+    gamma2: float = 2e6
+    angle: float = 0.0
+    imaginary: bool = True
+
+    @staticmethod
+    def model(frequencies: NDArray[Any], fq: float, f_rabi: float, gamma1: float, gamma2: float, angle: float) -> NDArray[Any]:
+        """Saturation spec model based on Blais circuit qed eqn 127"""
+        signal = 0.5 * f_rabi**2 / (
+            gamma1 * gamma2 + (frequencies - fq) ** 2 * gamma1 / gamma2 + f_rabi ** 2
+        )
+        signal_re = signal * np.cos(angle) 
+        signal_imag = signal * np.sin(angle)
+        return signal_re + 1j * signal_imag
 
 
 # ---------------------------------------------------------------------------
@@ -366,9 +416,24 @@ class ReducePowerCorrection(Correction):
 class SaturationSpectroscopy(ProtocolOperation):
 
     _DUMMY_F_Q = 5e9
-    _DUMMY_GAMMA = 1e6
-    _DUMMY_A = 0.5
+    _DUMMY_F_R = 7e9
+    _DUMMY_DELTA = _DUMMY_F_R - _DUMMY_F_Q
+
+    _DUMMY_P_IN = 1e-16
+    _DUMMY_G = 50e6
+    _DUMMY_KAPPA_R = 0.2e6
+
+    _DUMMY_T1 = 50e-6
+    _DUMMY_T2 = 50e-6
+    _DUMMY_GAMMA_1 = 1 / _DUMMY_T1
+    _DUMMY_GAMMA_2 = 1 / (np.pi * _DUMMY_T2)
+
+    _DUMMY_OMEGA = 2 * (_DUMMY_G / _DUMMY_DELTA) * np.sqrt(_DUMMY_KAPPA_R * _DUMMY_P_IN / (h * _DUMMY_F_Q))
+    _DUMMY_GAMMA_Q = np.sqrt( (1 / _DUMMY_T2) ** 2 + ((2 * np.pi * _DUMMY_OMEGA) ** 2 * _DUMMY_T1 / _DUMMY_T2) ) / np.pi # blais eq 127
+
     _DUMMY_NOISE_AMP = 0.05
+    _DUMMY_ANGLE = np.pi / 4
+
 
 
     def __init__(self, params):
@@ -474,10 +539,10 @@ class SaturationSpectroscopy(ProtocolOperation):
     def _measure_dummy(self) -> Path:
         logger.info("Starting dummy saturation spectroscopy measurement")
         frequencies = np.linspace(self.start_freq(), self.end_freq(), int(self.steps()))
-        generator = LorentzianDataGen(x0=self._DUMMY_F_Q, gamma=self._DUMMY_GAMMA, A=self._DUMMY_A, of=0, noise_std=self._DUMMY_NOISE_AMP)
-        sweep = sweep_parameter('frequencies', frequencies) * Sweep(record_as(generator.generate(frequencies), 'signal'))
+        generator = SatSpec(fq=self._DUMMY_F_Q, f_rabi=self._DUMMY_OMEGA, gamma1=self._DUMMY_GAMMA_1, gamma2=self._DUMMY_GAMMA_2, angle=self._DUMMY_ANGLE, noise_std=self._DUMMY_NOISE_AMP)
+        sweep = sweep_parameter("frequencies", frequencies, record_as(lambda frequencies: generator.generate(np.atleast_1d(frequencies)), "signal"))
         loc, _ = run_and_save_sweep(sweep, "data", self.name)
-        logger.info("Dummy measurement complete")
+        logger.info("Dummy saturation spectroscopy measurement complete.")
         return loc
 
     def _load_data_dummy(self):

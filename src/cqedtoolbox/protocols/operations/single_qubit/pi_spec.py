@@ -10,7 +10,7 @@ plt.switch_backend("agg")
 from labcore.analysis import DatasetAnalysis
 from labcore.analysis.fitfuncs.generic import Gaussian
 from labcore.measurement.storage import run_and_save_sweep
-from labcore.measurement.sweep import sweep_parameter, Sweep
+from labcore.measurement.sweep import sweep_parameter
 from labcore.measurement.record import record_as
 from labcore.data.datagen import Gaussian as GaussianDataGen
 from labcore.data.datadict_storage import datadict_from_hdf5
@@ -38,6 +38,8 @@ class PiSpecSNRThreshold(CorrectionParameter):
     name: str = field(default="pi_spec_snr_threshold", init=False)
     description: str = field(default="Minimum SNR for a successful pi spectroscopy fit", init=False)
 
+    def _dummy_getter(self): return 2.0
+
     def _qick_getter(self):
         return self.params.corrections.pi_spec.snr()
 
@@ -49,6 +51,8 @@ class PiSpecSNRThreshold(CorrectionParameter):
 class PiSpecMaxFitParamError(CorrectionParameter):
     name: str = field(default="pi_spec_max_fit_param_error", init=False)
     description: str = field(default="Max allowed fractional fit parameter error (e.g. 1.0 = 100%)", init=False)
+
+    def _dummy_getter(self): return 1.0
 
     def _qick_getter(self):
         return self.params.corrections.pi_spec.max_fit_param_error()
@@ -62,6 +66,8 @@ class PiSpecAveragingFactor(CorrectionParameter):
     name: str = field(default="pi_spec_averaging_factor", init=False)
     description: str = field(default="Factor by which to multiply repetitions on retry", init=False)
 
+    def _dummy_getter(self): return 2.0
+
     def _qick_getter(self):
         return self.params.corrections.pi_spec.averaging_factor()
 
@@ -73,6 +79,8 @@ class PiSpecAveragingFactor(CorrectionParameter):
 class PiSpecMaxAveragingIncreases(CorrectionParameter):
     name: str = field(default="pi_spec_max_averaging_increases", init=False)
     description: str = field(default="Maximum number of repetition increases to attempt", init=False)
+
+    def _dummy_getter(self): return 3
 
     def _qick_getter(self):
         return int(self.params.corrections.pi_spec.max_averaging_increases())
@@ -164,7 +172,7 @@ class PiSpectroscopy(ProtocolOperation):
         center = (self.start_freq() + self.end_freq()) / 2 + self._SIM_CENTER
 
         generator = GaussianDataGen(x0=center, sigma=self._SIM_SIGMA, A=self._SIM_AMP, of=0, noise_std=self._SIM_NOISE_AMP)
-        sweep = sweep_parameter("frequencies", frequencies) * Sweep(record_as(generator.generate(frequencies), "signal"))
+        sweep = sweep_parameter("frequencies", frequencies, record_as(lambda frequencies: generator.generate(np.atleast_1d(frequencies)), "signal"))
         loc, _ = run_and_save_sweep(sweep, "data", self.name)
         logger.info("Dummy measurement complete")
         return loc

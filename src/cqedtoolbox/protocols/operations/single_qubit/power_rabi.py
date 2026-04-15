@@ -10,7 +10,7 @@ plt.switch_backend("agg")
 from labcore.analysis import DatasetAnalysis
 from labcore.analysis.fitfuncs.generic import Cosine
 from labcore.measurement.storage import run_and_save_sweep
-from labcore.measurement import sweep_parameter, record_as, Sweep
+from labcore.measurement import sweep_parameter, record_as
 from labcore.data.datagen import PowerRabi as PowerRabiDataGen
 from labcore.data.datadict_storage import datadict_from_hdf5
 
@@ -41,6 +41,8 @@ class SNRThreshold(CorrectionParameter):
     name: str = field(default="power_rabi_snr_threshold", init=False)
     description: str = field(default="SNR threshold for power rabi quality check", init=False)
 
+    def _dummy_getter(self): return 2.0
+
     def _qick_getter(self): return self.params.corrections.power_rabi.snr()
     def _qick_setter(self, v): self.params.corrections.power_rabi.snr(v)
 
@@ -49,6 +51,8 @@ class SNRThreshold(CorrectionParameter):
 class MaxFitParamError(CorrectionParameter):
     name: str = field(default="power_rabi_max_fit_param_error", init=False)
     description: str = field(default="Maximum allowed fractional fit parameter error (e.g. 1.0 = 100%)", init=False)
+
+    def _dummy_getter(self): return 1.0
 
     def _qick_getter(self): return self.params.corrections.power_rabi.max_fit_param_error()
     def _qick_setter(self, v): self.params.corrections.power_rabi.max_fit_param_error(v)
@@ -59,6 +63,8 @@ class AveragingIncreaseFactor(CorrectionParameter):
     name: str = field(default="power_rabi_averaging_factor", init=False)
     description: str = field(default="Factor by which to increase repetitions", init=False)
 
+    def _dummy_getter(self): return 2.0
+
     def _qick_getter(self): return self.params.corrections.power_rabi.averaging_factor()
     def _qick_setter(self, v): self.params.corrections.power_rabi.averaging_factor(v)
 
@@ -67,6 +73,8 @@ class AveragingIncreaseFactor(CorrectionParameter):
 class MaxAveragingIncreases(CorrectionParameter):
     name: str = field(default="power_rabi_max_averaging_increases", init=False)
     description: str = field(default="Maximum number of averaging increases to try", init=False)
+
+    def _dummy_getter(self): return 3
 
     def _qick_getter(self): return int(self.params.corrections.power_rabi.max_averaging_increases())
     def _qick_setter(self, v): self.params.corrections.power_rabi.max_averaging_increases(v)
@@ -77,6 +85,8 @@ class SamplingIncreaseFactor(CorrectionParameter):
     name: str = field(default="power_rabi_sampling_factor", init=False)
     description: str = field(default="Factor by which to increase gain steps", init=False)
 
+    def _dummy_getter(self): return 2.0
+
     def _qick_getter(self): return self.params.corrections.power_rabi.sampling_factor()
     def _qick_setter(self, v): self.params.corrections.power_rabi.sampling_factor(v)
 
@@ -85,6 +95,8 @@ class SamplingIncreaseFactor(CorrectionParameter):
 class MaxSamplingIncreases(CorrectionParameter):
     name: str = field(default="power_rabi_max_sampling_increases", init=False)
     description: str = field(default="Maximum number of step count increases to try", init=False)
+
+    def _dummy_getter(self): return 3
 
     def _qick_getter(self): return int(self.params.corrections.power_rabi.max_sampling_increases())
     def _qick_setter(self, v): self.params.corrections.power_rabi.max_sampling_increases(v)
@@ -95,6 +107,8 @@ class DelayIncreaseFactor(CorrectionParameter):
     name: str = field(default="power_rabi_delay_factor", init=False)
     description: str = field(default="Factor by which to increase delay between shots", init=False)
 
+    def _dummy_getter(self): return 2.0
+
     def _qick_getter(self): return self.params.corrections.power_rabi.delay_factor()
     def _qick_setter(self, v): self.params.corrections.power_rabi.delay_factor(v)
 
@@ -103,6 +117,8 @@ class DelayIncreaseFactor(CorrectionParameter):
 class MaxDelayIncreases(CorrectionParameter):
     name: str = field(default="power_rabi_max_delay_increases", init=False)
     description: str = field(default="Maximum number of delay increases to try", init=False)
+
+    def _dummy_getter(self): return 3
 
     def _qick_getter(self): return int(self.params.corrections.power_rabi.max_delay_increases())
     def _qick_setter(self, v): self.params.corrections.power_rabi.max_delay_increases(v)
@@ -113,6 +129,8 @@ class GainRangeShrinkFactor(CorrectionParameter):
     name: str = field(default="power_rabi_gain_shrink_factor", init=False)
     description: str = field(default="Factor by which to divide the gain half-span on each shrink", init=False)
 
+    def _dummy_getter(self): return 0.5
+
     def _qick_getter(self): return self.params.corrections.power_rabi.gain_shrink_factor()
     def _qick_setter(self, v): self.params.corrections.power_rabi.gain_shrink_factor(v)
 
@@ -121,6 +139,8 @@ class GainRangeShrinkFactor(CorrectionParameter):
 class MaxGainRangeShrinks(CorrectionParameter):
     name: str = field(default="power_rabi_max_gain_shrinks", init=False)
     description: str = field(default="Maximum number of gain range shrink steps to try", init=False)
+
+    def _dummy_getter(self): return 3
 
     def _qick_getter(self): return int(self.params.corrections.power_rabi.max_gain_shrinks())
     def _qick_setter(self, v): self.params.corrections.power_rabi.max_gain_shrinks(v)
@@ -359,7 +379,7 @@ class PowerRabi(ProtocolOperation):
         logger.info("Starting dummy power rabi measurement")
         gains = np.linspace(self.start_gain(), self.end_gain(), int(self.steps_gain()))
         generator = PowerRabiDataGen(pi_amp=self._SIM_PI_AMP, noise_std=self._SIM_NOISE_AMP)
-        sweep = sweep_parameter("gains", gains) * Sweep(record_as(generator.generate(gains), "signal"))
+        sweep = sweep_parameter("gains", gains, record_as(lambda gains: generator.generate(np.atleast_1d(gains)), "signal"))
         loc, _ = run_and_save_sweep(sweep, "data", self.name)
         logger.info("Dummy measurement complete")
         return loc

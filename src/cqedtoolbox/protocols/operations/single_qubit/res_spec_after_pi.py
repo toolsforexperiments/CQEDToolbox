@@ -9,9 +9,9 @@ plt.switch_backend("agg")
 
 from labcore.analysis import DatasetAnalysis
 from labcore.measurement.storage import run_and_save_sweep
-from labcore.measurement.sweep import sweep_parameter, Sweep
+from labcore.measurement.sweep import sweep_parameter
 from labcore.measurement.record import record_as
-from labcore.data.datagen import HangerResonator
+from cqedtoolbox.protocols.operations.single_qubit.res_spec import HangerResonator
 from labcore.data.datadict_storage import datadict_from_hdf5
 
 from labcore.protocols.base import (ProtocolOperation, OperationStatus, serialize_fit_params,
@@ -41,6 +41,8 @@ class ResSpecAfterPiSNRThreshold(CorrectionParameter):
     name: str = field(default="res_spec_after_pi_snr_threshold", init=False)
     description: str = field(default="Minimum SNR for a successful resonator fit", init=False)
 
+    def _dummy_getter(self): return 2.0
+
     def _qick_getter(self):
         return self.params.corrections.res_spec_after_pi.snr()
 
@@ -53,6 +55,8 @@ class ResSpecAfterPiMaxFitParamError(CorrectionParameter):
     name: str = field(default="res_spec_after_pi_max_fit_param_error", init=False)
     description: str = field(default="Max allowed fractional fit parameter error (e.g. 1.0 = 100%)", init=False)
 
+    def _dummy_getter(self): return 1.0
+
     def _qick_getter(self):
         return self.params.corrections.res_spec_after_pi.max_fit_param_error()
 
@@ -64,6 +68,8 @@ class ResSpecAfterPiMaxFitParamError(CorrectionParameter):
 class DetuningThreshold(CorrectionParameter):
     name: str = field(default="res_spec_after_pi_detuning_threshold", init=False)
     description: str = field(default="Minimum Chi to consider the dispersive shift valid (MHz)", init=False)
+
+    def _dummy_getter(self): return 1.0e6
 
     def _qick_getter(self):
         return self.params.corrections.res_spec_after_pi.detuning_threshold()
@@ -130,11 +136,11 @@ class ResonatorSpectroscopyAfterPi(ProtocolOperation):
         frequencies = np.linspace(self.start_freq(), self.end_freq(), int(self.steps()))
 
         gen_before = HangerResonator(f0=_RS._SIM_F0, Qc=_RS._SIM_QC, Qi=_RS._SIM_QI, A=_RS._SIM_A, phi=_RS._SIM_PHI, noise_std=_RS._SIM_NOISE_AMP)
-        sweep_before = sweep_parameter("frequencies", frequencies) * Sweep(record_as(gen_before.generate(frequencies), "signal"))
+        sweep_before = sweep_parameter("frequencies", frequencies, record_as(lambda frequencies: gen_before.generate(np.atleast_1d(frequencies)), "signal"))
         loc_before, _ = run_and_save_sweep(sweep_before, "data", f"{self.name}_before")
 
         gen_after = HangerResonator(f0=_RS._SIM_F0 + self._SIM_CHI, Qc=_RS._SIM_QC, Qi=_RS._SIM_QI, A=_RS._SIM_A, phi=_RS._SIM_PHI, noise_std=_RS._SIM_NOISE_AMP)
-        sweep_after = sweep_parameter("frequencies", frequencies) * Sweep(record_as(gen_after.generate(frequencies), "signal"))
+        sweep_after = sweep_parameter("frequencies", frequencies, record_as(lambda frequencies: gen_after.generate(np.atleast_1d(frequencies)), "signal"))
         loc_after, _ = run_and_save_sweep(sweep_after, "data", f"{self.name}_after")
 
         self.data_loc_before = loc_before

@@ -10,7 +10,7 @@ plt.switch_backend("agg")
 from labcore.analysis import DatasetAnalysis
 from labcore.analysis.fitfuncs.generic import ExponentiallyDecayingSine
 from labcore.measurement.storage import run_and_save_sweep
-from labcore.measurement.sweep import sweep_parameter, Sweep
+from labcore.measurement.sweep import sweep_parameter
 from labcore.measurement.record import record_as
 from labcore.data.datagen import ExponentialDecayingSine
 from labcore.data.datadict_storage import datadict_from_hdf5
@@ -43,6 +43,8 @@ class SNRMinThreshold(CorrectionParameter):
     name: str = field(default="t2r_snr_min_threshold", init=False)
     description: str = field(default="Minimum SNR for a valid T2R fit component", init=False)
 
+    def _dummy_getter(self): return 2.0
+
     def _qick_getter(self): return self.params.corrections.t2r.snr_min()
     def _qick_setter(self, v): self.params.corrections.t2r.snr_min(v)
 
@@ -51,6 +53,8 @@ class SNRMinThreshold(CorrectionParameter):
 class MaxFitParamError(CorrectionParameter):
     name: str = field(default="t2r_max_fit_param_error", init=False)
     description: str = field(default="Maximum allowed fractional fit parameter error (e.g. 1.0 = 100%)", init=False)
+
+    def _dummy_getter(self): return 1.0
 
     def _qick_getter(self): return self.params.corrections.t2r.max_fit_param_error()
     def _qick_setter(self, v): self.params.corrections.t2r.max_fit_param_error(v)
@@ -61,6 +65,8 @@ class AveragingIncreaseFactor(CorrectionParameter):
     name: str = field(default="t2r_averaging_factor", init=False)
     description: str = field(default="Factor by which to increase repetitions", init=False)
 
+    def _dummy_getter(self): return 2.0
+
     def _qick_getter(self): return self.params.corrections.t2r.averaging_factor()
     def _qick_setter(self, v): self.params.corrections.t2r.averaging_factor(v)
 
@@ -69,6 +75,8 @@ class AveragingIncreaseFactor(CorrectionParameter):
 class MaxAveragingIncreases(CorrectionParameter):
     name: str = field(default="t2r_max_averaging_increases", init=False)
     description: str = field(default="Maximum number of averaging increases to try", init=False)
+
+    def _dummy_getter(self): return 3
 
     def _qick_getter(self): return int(self.params.corrections.t2r.max_averaging_increases())
     def _qick_setter(self, v): self.params.corrections.t2r.max_averaging_increases(v)
@@ -172,7 +180,7 @@ class T2ROperation(ProtocolOperation):
         logger.info("Starting dummy T2 Ramsey measurement")
         delays = np.linspace(0, 5 * self._SIM_T2R, int(self.steps()))
         generator = ExponentialDecayingSine(A=self._SIM_AMP, f=self._SIM_DETUNING, phi=0, tau=self._SIM_T2R, of=0, noise_std=self._SIM_NOISE_AMP)
-        sweep = sweep_parameter("delays", delays) * Sweep(record_as(generator.generate(delays), "signal"))
+        sweep = sweep_parameter("delays", delays, record_as(lambda delays: generator.generate(np.atleast_1d(delays)), "signal"))
         loc, _ = run_and_save_sweep(sweep, "data", self.name)
         logger.info("Dummy measurement complete")
         return loc

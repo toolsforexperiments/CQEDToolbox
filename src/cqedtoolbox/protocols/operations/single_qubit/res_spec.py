@@ -1,16 +1,17 @@
 import logging
 from pathlib import Path
 from dataclasses import dataclass, field
+from typing import Any
 
 import numpy as np
-from numpy.typing import ArrayLike
+from numpy.typing import ArrayLike, NDArray
 import matplotlib.pyplot as plt
 
 from labcore.analysis import DatasetAnalysis, FitResult
 from labcore.measurement.storage import run_and_save_sweep
 from labcore.data.datadict_storage import datadict_from_hdf5
-from labcore.measurement import sweep_parameter, record_as, Sweep
-from labcore.data.datagen import HangerResonator
+from labcore.measurement import sweep_parameter, record_as
+from labcore.data.datagen import DataGen
 
 from labcore.protocols.base import (ProtocolOperation, OperationStatus, serialize_fit_params,
                                     ParamImprovement, CorrectionParameter, CheckResult, Correction)
@@ -44,6 +45,8 @@ class SNRThreshold(CorrectionParameter):
     name: str = field(default="resonator_spec_SNR_threshold", init=False)
     description: str = field(default="SNR threshold", init=False)
 
+    def _dummy_getter(self): return 2.0
+
     def _qick_getter(self):
         return self.params.corrections.res_spec.snr()
 
@@ -55,6 +58,8 @@ class SNRThreshold(CorrectionParameter):
 class MaxWindowShifts(CorrectionParameter):
     name: str = field(default="res_spec_max_window_shifts", init=False)
     description: str = field(default="Number of ±n window shifts to try", init=False)
+
+    def _dummy_getter(self): return 3
 
     def _qick_getter(self):
         return int(self.params.corrections.res_spec.max_window_shifts())
@@ -68,6 +73,8 @@ class SamplingIncreaseFactor(CorrectionParameter):
     name: str = field(default="res_spec_sampling_increase_factor", init=False)
     description: str = field(default="Factor by which to increase frequency steps", init=False)
 
+    def _dummy_getter(self): return 2.0
+
     def _qick_getter(self):
         return self.params.corrections.res_spec.sampling_factor()
 
@@ -79,6 +86,8 @@ class SamplingIncreaseFactor(CorrectionParameter):
 class MaxSamplingIncreases(CorrectionParameter):
     name: str = field(default="res_spec_max_sampling_increases", init=False)
     description: str = field(default="Maximum number of sampling rate increases to try", init=False)
+
+    def _dummy_getter(self): return 3
 
     def _qick_getter(self):
         return int(self.params.corrections.res_spec.max_sampling_increases())
@@ -92,6 +101,8 @@ class AveragingIncreaseFactor(CorrectionParameter):
     name: str = field(default="res_spec_averaging_increase_factor", init=False)
     description: str = field(default="Factor by which to increase repetitions", init=False)
 
+    def _dummy_getter(self): return 2.0
+
     def _qick_getter(self):
         return self.params.corrections.res_spec.averaging_factor()
 
@@ -104,6 +115,8 @@ class MaxAveragingIncreases(CorrectionParameter):
     name: str = field(default="res_spec_max_averaging_increases", init=False)
     description: str = field(default="Maximum number of averaging increases to try", init=False)
 
+    def _dummy_getter(self): return 3
+
     def _qick_getter(self):
         return int(self.params.corrections.res_spec.max_averaging_increases())
 
@@ -115,6 +128,8 @@ class MaxAveragingIncreases(CorrectionParameter):
 class MaxFitParamError(CorrectionParameter):
     name: str = field(default="res_spec_max_fit_param_error", init=False)
     description: str = field(default="Maximum allowed fractional fit parameter error (e.g. 1.0 = 100%)", init=False)
+
+    def _dummy_getter(self): return 1.0
 
     def _qick_getter(self):
         return self.params.corrections.res_spec.max_fit_param_error()
@@ -239,6 +254,32 @@ class IncreaseAveragingCorrection(Correction):
         return self._last_change
 
 
+# ---------------------------------------------------------------------------
+# HangerResonator DataGen
+# ---------------------------------------------------------------------------
+
+@dataclass
+class HangerResonator(DataGen):
+    A: float = 1
+    Qc: float = 1000
+    Qi: float = 1000
+    f0: float = 1e9
+    phi: float = 0
+    imaginary: bool = True
+
+    @staticmethod
+    def model(
+        coordinates: NDArray[Any], A: float, Qc: float, Qi: float, f0: float, phi: float
+    ) -> NDArray[Any]:
+        Q_l = 1.0 / (1.0 / Qc + 1.0 / Qi)
+        Q_e_complex = Qc * np.exp(-1j * phi)
+        return A * (1 - (Q_l / Q_e_complex) / (1 + 2j * Q_l * (coordinates - f0) / f0))
+
+
+# ---------------------------------------------------------------------------
+# Operation
+# ---------------------------------------------------------------------------
+
 class ResonatorSpectroscopy(ProtocolOperation):
 
     _SIM_F0 = 7e9
@@ -338,9 +379,9 @@ class ResonatorSpectroscopy(ProtocolOperation):
     
     def _measure_dummy(self):
         logger.info("Starting dummy resonator spectroscopy measurement")
-        frequencies = np.linspace(self.start_frequency(), self.end_frequency(), int(self.steps())) + self.readout_freq()
+        frequencies = np.linspace(self.start_frequency(), self.end_frequency(), int(self.steps()))
         generator = HangerResonator(f0=self._SIM_F0, Qc=self._SIM_QC, Qi=self._SIM_QI, A=self._SIM_A, phi=self._SIM_PHI, noise_std=self._SIM_NOISE_AMP)
-        sweep = sweep_parameter("frequencies", frequencies) * Sweep(record_as(generator.generate(frequencies), "signal"))
+        sweep = sweep_parameter("frequencies", frequencies, record_as(lambda frequencies: generator.generate(np.atleast_1d(frequencies)), "signal"))
         loc, _ = run_and_save_sweep(sweep, "data", self.name)
         logger.info("Dummy measurement complete")
         return loc
