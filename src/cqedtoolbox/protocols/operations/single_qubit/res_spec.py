@@ -45,13 +45,14 @@ class SNRThreshold(CorrectionParameter):
     name: str = field(default="resonator_spec_SNR_threshold", init=False)
     description: str = field(default="SNR threshold", init=False)
 
-    def _dummy_getter(self): return 2.0
-
     def _qick_getter(self):
         return self.params.corrections.res_spec.snr()
 
     def _qick_setter(self, value):
         self.params.corrections.res_spec.snr(value)
+
+    _dummy_getter = _qick_getter
+    _dummy_setter = _qick_setter
 
 
 @dataclass
@@ -59,13 +60,14 @@ class MaxWindowShifts(CorrectionParameter):
     name: str = field(default="res_spec_max_window_shifts", init=False)
     description: str = field(default="Number of ±n window shifts to try", init=False)
 
-    def _dummy_getter(self): return 3
-
     def _qick_getter(self):
         return int(self.params.corrections.res_spec.max_window_shifts())
 
     def _qick_setter(self, value):
         self.params.corrections.res_spec.max_window_shifts(value)
+
+    _dummy_getter = _qick_getter
+    _dummy_setter = _qick_setter
 
 
 @dataclass
@@ -73,13 +75,14 @@ class SamplingIncreaseFactor(CorrectionParameter):
     name: str = field(default="res_spec_sampling_increase_factor", init=False)
     description: str = field(default="Factor by which to increase frequency steps", init=False)
 
-    def _dummy_getter(self): return 2.0
-
     def _qick_getter(self):
         return self.params.corrections.res_spec.sampling_factor()
 
     def _qick_setter(self, value):
         self.params.corrections.res_spec.sampling_factor(value)
+
+    _dummy_getter = _qick_getter
+    _dummy_setter = _qick_setter
 
 
 @dataclass
@@ -87,13 +90,14 @@ class MaxSamplingIncreases(CorrectionParameter):
     name: str = field(default="res_spec_max_sampling_increases", init=False)
     description: str = field(default="Maximum number of sampling rate increases to try", init=False)
 
-    def _dummy_getter(self): return 3
-
     def _qick_getter(self):
         return int(self.params.corrections.res_spec.max_sampling_increases())
 
     def _qick_setter(self, value):
         self.params.corrections.res_spec.max_sampling_increases(value)
+
+    _dummy_getter = _qick_getter
+    _dummy_setter = _qick_setter
 
 
 @dataclass
@@ -101,13 +105,14 @@ class AveragingIncreaseFactor(CorrectionParameter):
     name: str = field(default="res_spec_averaging_increase_factor", init=False)
     description: str = field(default="Factor by which to increase repetitions", init=False)
 
-    def _dummy_getter(self): return 2.0
-
     def _qick_getter(self):
         return self.params.corrections.res_spec.averaging_factor()
 
     def _qick_setter(self, value):
         self.params.corrections.res_spec.averaging_factor(value)
+
+    _dummy_getter = _qick_getter
+    _dummy_setter = _qick_setter
 
 
 @dataclass
@@ -115,13 +120,14 @@ class MaxAveragingIncreases(CorrectionParameter):
     name: str = field(default="res_spec_max_averaging_increases", init=False)
     description: str = field(default="Maximum number of averaging increases to try", init=False)
 
-    def _dummy_getter(self): return 3
-
     def _qick_getter(self):
         return int(self.params.corrections.res_spec.max_averaging_increases())
 
     def _qick_setter(self, value):
         self.params.corrections.res_spec.max_averaging_increases(value)
+
+    _dummy_getter = _qick_getter
+    _dummy_setter = _qick_setter
 
 
 @dataclass
@@ -129,13 +135,14 @@ class MaxFitParamError(CorrectionParameter):
     name: str = field(default="res_spec_max_fit_param_error", init=False)
     description: str = field(default="Maximum allowed fractional fit parameter error (e.g. 1.0 = 100%)", init=False)
 
-    def _dummy_getter(self): return 1.0
-
     def _qick_getter(self):
         return self.params.corrections.res_spec.max_fit_param_error()
 
     def _qick_setter(self, value):
         self.params.corrections.res_spec.max_fit_param_error(value)
+
+    _dummy_getter = _qick_getter
+    _dummy_setter = _qick_setter
 
 
 class WindowShiftCorrection(Correction):
@@ -282,9 +289,8 @@ class HangerResonator(DataGen):
 
 class ResonatorSpectroscopy(ProtocolOperation):
 
-    _SIM_F0 = 7e9
-    _SIM_QI = 20e3
-    _SIM_QC = 20e3
+    _SIM_QI = 500
+    _SIM_QC = 500
     _SIM_A = 4.0
     _SIM_PHI = 0.0
     _SIM_NOISE_AMP = 0.05
@@ -380,8 +386,9 @@ class ResonatorSpectroscopy(ProtocolOperation):
     def _measure_dummy(self):
         logger.info("Starting dummy resonator spectroscopy measurement")
         frequencies = np.linspace(self.start_frequency(), self.end_frequency(), int(self.steps()))
-        generator = HangerResonator(f0=self._SIM_F0, Qc=self._SIM_QC, Qi=self._SIM_QI, A=self._SIM_A, phi=self._SIM_PHI, noise_std=self._SIM_NOISE_AMP)
-        sweep = sweep_parameter("frequencies", frequencies, record_as(lambda frequencies: generator.generate(np.atleast_1d(frequencies)), "signal"))
+        f0 = (self.start_frequency() + self.end_frequency()) / 2
+        generator = HangerResonator(f0=f0, Qc=self._SIM_QC, Qi=self._SIM_QI, A=self._SIM_A, phi=self._SIM_PHI, noise_std=self._SIM_NOISE_AMP)
+        sweep = sweep_parameter("frequencies", frequencies, record_as(lambda frequencies: np.atleast_1d(generator.generate(np.atleast_1d(frequencies)))[0], "signal"))
         loc, _ = run_and_save_sweep(sweep, "data", self.name)
         logger.info("Dummy measurement complete")
         return loc

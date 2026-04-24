@@ -36,13 +36,14 @@ class ResSpecVsGainSNRThreshold(CorrectionParameter):
     name: str = field(default="res_spec_vs_gain_snr_threshold", init=False)
     description: str = field(default="SNR threshold for low-gain quality check", init=False)
 
-    def _dummy_getter(self): return 2.0
-
     def _qick_getter(self):
         return self.params.corrections.res_spec_vs_gain.snr()
 
     def _qick_setter(self, v):
         self.params.corrections.res_spec_vs_gain.snr(v)
+
+    _dummy_getter = _qick_getter
+    _dummy_setter = _qick_setter
 
 
 @dataclass
@@ -50,13 +51,14 @@ class ResSpecVsGainMaxFitParamError(CorrectionParameter):
     name: str = field(default="res_spec_vs_gain_max_fit_param_error", init=False)
     description: str = field(default="Max fractional fit parameter error (e.g. 1.0 = 100%)", init=False)
 
-    def _dummy_getter(self): return 1.0
-
     def _qick_getter(self):
         return self.params.corrections.res_spec_vs_gain.max_fit_param_error()
 
     def _qick_setter(self, v):
         self.params.corrections.res_spec_vs_gain.max_fit_param_error(v)
+
+    _dummy_getter = _qick_getter
+    _dummy_setter = _qick_setter
 
 
 @dataclass
@@ -64,13 +66,14 @@ class ResSpecVsGainHighSNRThreshold(CorrectionParameter):
     name: str = field(default="res_spec_vs_gain_high_snr_threshold", init=False)
     description: str = field(default="High SNR threshold — at least one trace must exceed this", init=False)
 
-    def _dummy_getter(self): return 2.0
-
     def _qick_getter(self):
         return self.params.corrections.res_spec_vs_gain.high_snr()
 
     def _qick_setter(self, v):
         self.params.corrections.res_spec_vs_gain.high_snr(v)
+
+    _dummy_getter = _qick_getter
+    _dummy_setter = _qick_setter
 
 
 @dataclass
@@ -78,13 +81,14 @@ class ResSpecVsGainRepetitionFactor(CorrectionParameter):
     name: str = field(default="res_spec_vs_gain_repetition_factor", init=False)
     description: str = field(default="Factor by which repetitions are increased on retry", init=False)
 
-    def _dummy_getter(self): return 2.0
-
     def _qick_getter(self):
         return self.params.corrections.res_spec_vs_gain.rep_factor()
 
     def _qick_setter(self, v):
         self.params.corrections.res_spec_vs_gain.rep_factor(v)
+
+    _dummy_getter = _qick_getter
+    _dummy_setter = _qick_setter
 
 
 @dataclass
@@ -92,13 +96,14 @@ class ResSpecVsGainMaxRepetitionIncreases(CorrectionParameter):
     name: str = field(default="res_spec_vs_gain_max_rep_increases", init=False)
     description: str = field(default="Maximum number of repetition increases to attempt", init=False)
 
-    def _dummy_getter(self): return 3
-
     def _qick_getter(self):
         return int(self.params.corrections.res_spec_vs_gain.max_rep_increases())
 
     def _qick_setter(self, v):
         self.params.corrections.res_spec_vs_gain.max_rep_increases(v)
+
+    _dummy_getter = _qick_getter
+    _dummy_setter = _qick_setter
 
 
 class IncreaseRepetitionsCorrection(Correction):
@@ -204,7 +209,8 @@ class ResonatorSpectroscopyVsGain(ProtocolOperation):
 
     def _measure_dummy(self) -> Path:
 
-        freq_shift_per_gain_unit = -.5e6  # MHz per gain unit
+        freq_shift_per_gain_unit = -5e6  # Hz per gain unit
+        f0_center = (self.start_frequency() + self.end_frequency()) / 2
 
         @recording(
             indep("gains"),
@@ -214,9 +220,9 @@ class ResonatorSpectroscopyVsGain(ProtocolOperation):
             gains = np.linspace(self.start_gain(), self.end_gain(), self._SIM_N_GAIN_STEPS)
             ret_signal = []
             for i in range(self._SIM_N_GAIN_STEPS):
-                shifted_center = _RS._SIM_F0 + freq_shift_per_gain_unit * i
+                shifted_center = f0_center + freq_shift_per_gain_unit * i
                 generator = HangerResonator(f0=shifted_center, Qc=_RS._SIM_QC, Qi=_RS._SIM_QI, A=_RS._SIM_A, phi=_RS._SIM_PHI, noise_std=_RS._SIM_NOISE_AMP)
-                ret_signal.append(generator.generate(np.atleast_1d(frequencies)))
+                ret_signal.append(np.atleast_1d(generator.generate(np.atleast_1d(frequencies)))[0])
 
             return gains, ret_signal
 

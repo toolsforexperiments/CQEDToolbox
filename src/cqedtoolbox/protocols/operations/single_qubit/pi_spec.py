@@ -38,13 +38,14 @@ class PiSpecSNRThreshold(CorrectionParameter):
     name: str = field(default="pi_spec_snr_threshold", init=False)
     description: str = field(default="Minimum SNR for a successful pi spectroscopy fit", init=False)
 
-    def _dummy_getter(self): return 2.0
-
     def _qick_getter(self):
         return self.params.corrections.pi_spec.snr()
 
     def _qick_setter(self, value):
         self.params.corrections.pi_spec.snr(value)
+
+    _dummy_getter = _qick_getter
+    _dummy_setter = _qick_setter
 
 
 @dataclass
@@ -52,13 +53,14 @@ class PiSpecMaxFitParamError(CorrectionParameter):
     name: str = field(default="pi_spec_max_fit_param_error", init=False)
     description: str = field(default="Max allowed fractional fit parameter error (e.g. 1.0 = 100%)", init=False)
 
-    def _dummy_getter(self): return 1.0
-
     def _qick_getter(self):
         return self.params.corrections.pi_spec.max_fit_param_error()
 
     def _qick_setter(self, value):
         self.params.corrections.pi_spec.max_fit_param_error(value)
+
+    _dummy_getter = _qick_getter
+    _dummy_setter = _qick_setter
 
 
 @dataclass
@@ -66,13 +68,14 @@ class PiSpecAveragingFactor(CorrectionParameter):
     name: str = field(default="pi_spec_averaging_factor", init=False)
     description: str = field(default="Factor by which to multiply repetitions on retry", init=False)
 
-    def _dummy_getter(self): return 2.0
-
     def _qick_getter(self):
         return self.params.corrections.pi_spec.averaging_factor()
 
     def _qick_setter(self, value):
         self.params.corrections.pi_spec.averaging_factor(value)
+
+    _dummy_getter = _qick_getter
+    _dummy_setter = _qick_setter
 
 
 @dataclass
@@ -80,13 +83,14 @@ class PiSpecMaxAveragingIncreases(CorrectionParameter):
     name: str = field(default="pi_spec_max_averaging_increases", init=False)
     description: str = field(default="Maximum number of repetition increases to attempt", init=False)
 
-    def _dummy_getter(self): return 3
-
     def _qick_getter(self):
         return int(self.params.corrections.pi_spec.max_averaging_increases())
 
     def _qick_setter(self, value):
         self.params.corrections.pi_spec.max_averaging_increases(value)
+
+    _dummy_getter = _qick_getter
+    _dummy_setter = _qick_setter
 
 
 class IncreaseAveragingCorrection(Correction):
@@ -171,8 +175,8 @@ class PiSpectroscopy(ProtocolOperation):
         frequencies = np.linspace(self.start_freq(), self.end_freq(), int(self.steps()))
         center = (self.start_freq() + self.end_freq()) / 2 + self._SIM_CENTER
 
-        generator = GaussianDataGen(x0=center, sigma=self._SIM_SIGMA, A=self._SIM_AMP, of=0, noise_std=self._SIM_NOISE_AMP)
-        sweep = sweep_parameter("frequencies", frequencies, record_as(lambda frequencies: generator.generate(np.atleast_1d(frequencies)), "signal"))
+        generator = GaussianDataGen(x0=center, sigma=self._SIM_SIGMA, A=self._SIM_AMP, of=0, noise_std=self._SIM_NOISE_AMP, imaginary=True)
+        sweep = sweep_parameter("frequencies", frequencies, record_as(lambda frequencies: np.atleast_1d(generator.generate(np.atleast_1d(frequencies)))[0], "signal"))
         loc, _ = run_and_save_sweep(sweep, "data", self.name)
         logger.info("Dummy measurement complete")
         return loc

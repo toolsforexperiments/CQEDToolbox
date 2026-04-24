@@ -41,13 +41,14 @@ class ResSpecAfterPiSNRThreshold(CorrectionParameter):
     name: str = field(default="res_spec_after_pi_snr_threshold", init=False)
     description: str = field(default="Minimum SNR for a successful resonator fit", init=False)
 
-    def _dummy_getter(self): return 2.0
-
     def _qick_getter(self):
         return self.params.corrections.res_spec_after_pi.snr()
 
     def _qick_setter(self, value):
         self.params.corrections.res_spec_after_pi.snr(value)
+
+    _dummy_getter = _qick_getter
+    _dummy_setter = _qick_setter
 
 
 @dataclass
@@ -55,13 +56,14 @@ class ResSpecAfterPiMaxFitParamError(CorrectionParameter):
     name: str = field(default="res_spec_after_pi_max_fit_param_error", init=False)
     description: str = field(default="Max allowed fractional fit parameter error (e.g. 1.0 = 100%)", init=False)
 
-    def _dummy_getter(self): return 1.0
-
     def _qick_getter(self):
         return self.params.corrections.res_spec_after_pi.max_fit_param_error()
 
     def _qick_setter(self, value):
         self.params.corrections.res_spec_after_pi.max_fit_param_error(value)
+
+    _dummy_getter = _qick_getter
+    _dummy_setter = _qick_setter
 
 
 @dataclass
@@ -69,13 +71,14 @@ class DetuningThreshold(CorrectionParameter):
     name: str = field(default="res_spec_after_pi_detuning_threshold", init=False)
     description: str = field(default="Minimum Chi to consider the dispersive shift valid (MHz)", init=False)
 
-    def _dummy_getter(self): return 1.0e6
-
     def _qick_getter(self):
         return self.params.corrections.res_spec_after_pi.detuning_threshold()
 
     def _qick_setter(self, value):
         self.params.corrections.res_spec_after_pi.detuning_threshold(value)
+
+    _dummy_getter = _qick_getter
+    _dummy_setter = _qick_setter
 
 
 class ResonatorSpectroscopyAfterPi(ProtocolOperation):
@@ -129,18 +132,19 @@ class ResonatorSpectroscopyAfterPi(ProtocolOperation):
         # Detuning value
         self.chi = None
 
-    _SIM_CHI = 2.0  # MHz dispersive shift between ground and excited state
+    _SIM_CHI = 2e6  # Hz dispersive shift between ground and excited state
 
     def _measure_dummy(self) -> Path:
         logger.info("Starting dummy resonator spectroscopy before/after pi measurement")
         frequencies = np.linspace(self.start_freq(), self.end_freq(), int(self.steps()))
 
-        gen_before = HangerResonator(f0=_RS._SIM_F0, Qc=_RS._SIM_QC, Qi=_RS._SIM_QI, A=_RS._SIM_A, phi=_RS._SIM_PHI, noise_std=_RS._SIM_NOISE_AMP)
-        sweep_before = sweep_parameter("frequencies", frequencies, record_as(lambda frequencies: gen_before.generate(np.atleast_1d(frequencies)), "signal"))
+        f0 = (self.start_freq() + self.end_freq()) / 2
+        gen_before = HangerResonator(f0=f0, Qc=_RS._SIM_QC, Qi=_RS._SIM_QI, A=_RS._SIM_A, phi=_RS._SIM_PHI, noise_std=_RS._SIM_NOISE_AMP)
+        sweep_before = sweep_parameter("frequencies", frequencies, record_as(lambda frequencies: np.atleast_1d(gen_before.generate(np.atleast_1d(frequencies)))[0], "signal"))
         loc_before, _ = run_and_save_sweep(sweep_before, "data", f"{self.name}_before")
 
-        gen_after = HangerResonator(f0=_RS._SIM_F0 + self._SIM_CHI, Qc=_RS._SIM_QC, Qi=_RS._SIM_QI, A=_RS._SIM_A, phi=_RS._SIM_PHI, noise_std=_RS._SIM_NOISE_AMP)
-        sweep_after = sweep_parameter("frequencies", frequencies, record_as(lambda frequencies: gen_after.generate(np.atleast_1d(frequencies)), "signal"))
+        gen_after = HangerResonator(f0=f0 + self._SIM_CHI, Qc=_RS._SIM_QC, Qi=_RS._SIM_QI, A=_RS._SIM_A, phi=_RS._SIM_PHI, noise_std=_RS._SIM_NOISE_AMP)
+        sweep_after = sweep_parameter("frequencies", frequencies, record_as(lambda frequencies: np.atleast_1d(gen_after.generate(np.atleast_1d(frequencies)))[0], "signal"))
         loc_after, _ = run_and_save_sweep(sweep_after, "data", f"{self.name}_after")
 
         self.data_loc_before = loc_before
