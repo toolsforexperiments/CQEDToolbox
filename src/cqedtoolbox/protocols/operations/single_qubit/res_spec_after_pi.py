@@ -11,6 +11,7 @@ from labcore.analysis import DatasetAnalysis
 from labcore.measurement.storage import run_and_save_sweep
 from labcore.measurement.sweep import sweep_parameter
 from labcore.measurement.record import record_as
+from cqedtoolbox.protocols.operations.single_qubit.res_spec import HangerResonator
 from labcore.data.datadict_storage import datadict_from_hdf5
 
 from labcore.protocols.base import (ProtocolOperation, OperationStatus, serialize_fit_params,
@@ -27,7 +28,7 @@ from cqedtoolbox.protocols.parameters import (
 from cqedtoolbox.measurement_lib.qick.single_transmon_v2 import FreqSweepProgram, ResProbeProgram
 
 from cqedtoolbox.fitfuncs.resonators import HangerResponseBruno
-from cqedtoolbox.protocols.operations.single_qubit.res_spec import SyntheticHangerResonatorData
+from cqedtoolbox.protocols.operations.single_qubit.res_spec import ResonatorSpectroscopy as _RS
 
 
 logger = logging.getLogger(__name__)
@@ -46,6 +47,9 @@ class ResSpecAfterPiSNRThreshold(CorrectionParameter):
     def _qick_setter(self, value):
         self.params.corrections.res_spec_after_pi.snr(value)
 
+    _dummy_getter = _qick_getter
+    _dummy_setter = _qick_setter
+
 
 @dataclass
 class ResSpecAfterPiMaxFitParamError(CorrectionParameter):
@@ -58,6 +62,9 @@ class ResSpecAfterPiMaxFitParamError(CorrectionParameter):
     def _qick_setter(self, value):
         self.params.corrections.res_spec_after_pi.max_fit_param_error(value)
 
+    _dummy_getter = _qick_getter
+    _dummy_setter = _qick_setter
+
 
 @dataclass
 class DetuningThreshold(CorrectionParameter):
@@ -69,6 +76,9 @@ class DetuningThreshold(CorrectionParameter):
 
     def _qick_setter(self, value):
         self.params.corrections.res_spec_after_pi.detuning_threshold(value)
+
+    _dummy_getter = _qick_getter
+    _dummy_setter = _qick_setter
 
 
 class ResonatorSpectroscopyAfterPi(ProtocolOperation):
@@ -122,27 +132,19 @@ class ResonatorSpectroscopyAfterPi(ProtocolOperation):
         # Detuning value
         self.chi = None
 
-    _SIM_CHI = 2.0  # MHz dispersive shift between ground and excited state
+    _SIM_CHI = 2e6  # Hz dispersive shift between ground and excited state
 
     def _measure_dummy(self) -> Path:
         logger.info("Starting dummy resonator spectroscopy before/after pi measurement")
-        from cqedtoolbox.protocols.operations.single_qubit.res_spec import ResonatorSpectroscopy as _RS
         frequencies = np.linspace(self.start_freq(), self.end_freq(), int(self.steps()))
 
-        gen_before = SyntheticHangerResonatorData(
-            f0=_RS._SIM_F0, Qi=_RS._SIM_QI, Qc=_RS._SIM_QC,
-            A=_RS._SIM_A, phi=_RS._SIM_PHI, noise_amp=_RS._SIM_NOISE_AMP
-        )
-        # signal_before = gen_before.generate(frequencies)
-        sweep_before = sweep_parameter("frequencies", frequencies, record_as(gen_before.generate, "signal"))
+        f0 = (self.start_freq() + self.end_freq()) / 2
+        gen_before = HangerResonator(f0=f0, Qc=_RS._SIM_QC, Qi=_RS._SIM_QI, A=_RS._SIM_A, phi=_RS._SIM_PHI, noise_std=_RS._SIM_NOISE_AMP)
+        sweep_before = sweep_parameter("frequencies", frequencies, record_as(lambda frequencies: np.atleast_1d(gen_before.generate(np.atleast_1d(frequencies)))[0], "signal"))
         loc_before, _ = run_and_save_sweep(sweep_before, "data", f"{self.name}_before")
 
-        gen_after = SyntheticHangerResonatorData(
-            f0=_RS._SIM_F0 + self._SIM_CHI, Qi=_RS._SIM_QI, Qc=_RS._SIM_QC,
-            A=_RS._SIM_A, phi=_RS._SIM_PHI, noise_amp=_RS._SIM_NOISE_AMP
-        )
-        # signal_after = gen_after.generate(frequencies)
-        sweep_after = sweep_parameter("frequencies", frequencies, record_as(gen_after.generate, "signal"))
+        gen_after = HangerResonator(f0=f0 + self._SIM_CHI, Qc=_RS._SIM_QC, Qi=_RS._SIM_QI, A=_RS._SIM_A, phi=_RS._SIM_PHI, noise_std=_RS._SIM_NOISE_AMP)
+        sweep_after = sweep_parameter("frequencies", frequencies, record_as(lambda frequencies: np.atleast_1d(gen_after.generate(np.atleast_1d(frequencies)))[0], "signal"))
         loc_after, _ = run_and_save_sweep(sweep_after, "data", f"{self.name}_after")
 
         self.data_loc_before = loc_before
