@@ -6,7 +6,7 @@ dependencies:
   - python=3.12
   - jupyterlab
   - jupyter_bokeh
-  - qcodes=0.44.1
+  - qcodes
   - bokeh
   - pandas
   - xarray
