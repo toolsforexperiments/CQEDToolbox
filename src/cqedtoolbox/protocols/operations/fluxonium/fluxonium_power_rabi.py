@@ -16,7 +16,7 @@ from labcore.measurement.record import record_as, independent, dependent
 from labcore.protocols.base import ProtocolOperation, OperationStatus
 from cqedtoolbox.protocols.operations.fluxonium.res_spec_vs_flux import _fluxonium_basis, _readout_frequencies
 from cqedtoolbox.protocols.parameters import (
-    Repetition, StartFlux, EndFlux, FluxSteps, NumGainSteps, GainPulseDuration,
+    Repetition, StartFlux, EndFlux, FluxSteps, NumGainSteps, GainPulseDuration, GainMultiplier,
     QubitGain, QubitFrequency, ReadoutFrequency, ECParam, ELParam, EJParam, ZeroFluxCurrent
 )
 
@@ -178,6 +178,7 @@ class FluxoniumPowerRabi(ProtocolOperation):
             rabi_duration=GainPulseDuration(params),
             rabi_steps=NumGainSteps(params),
             f_rabi=QubitFrequency(params),
+            gain_multiplier=GainMultiplier(params),
             EC=ECParam(params),
             EL=ELParam(params),
             EJ=EJParam(params),
@@ -219,7 +220,7 @@ class FluxoniumPowerRabi(ProtocolOperation):
         for i_flux in range(n_flux):
             Veff_vec[i_flux] = _solve_for_amplitude(3*np.pi, self.rabi_duration(), self.EC(), self.EL(),
                 self.EJ(), flux_vals[i_flux] + self.Earth_flux())
-        V_grid = (Veff_vec[:, None]) * np.linspace(0.0, 1.0, n_Volts)[None, :]
+        V_grid = self.gain_multiplier() * (Veff_vec[:, None]) * np.linspace(0.0, 1.0, n_Volts)[None, :]
         fr_g_vs_flux=[]
         fr_e_vs_flux=[]
         for flux_ext in flux_vals:
