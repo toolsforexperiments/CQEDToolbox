@@ -42,7 +42,7 @@ The intended workflow is:
 ```text
 Resonator spectroscopy vs flux
         ↓
-Flux offset / zero-flux calibration (Use ML model https://github.com/Jianyaogu/Fluxonium-offset-inverse-model/tree/main if method in resonator spec vs flux works bad)
+Flux offset / zero-flux calibration (Use ML model "https://github.com/Jianyaogu/Fluxonium-offset-inverse-model/tree/main" if method in resonator spec vs flux works bad)
         ↓
 Fluxonium qubit / pi spectroscopy vs flux
         ↓
@@ -80,7 +80,7 @@ For real hardware execution, the production path should use QICK methods such as
 _measure_qick(...)
 ```
 
-The QICK implementation should follow the style of the corresponding `single_qubit/` protocol, but with the extra flux/current sweep added where needed.
+Dummy code should be replaced by written QICK implementation following the style of the corresponding `single_qubit/` protocol, but with the extra flux/current sweep added where needed.
 
 ---
 
@@ -101,15 +101,14 @@ Typical required parameters include:
 
 ```text
 repetitions
-readout frequency
+readout/drive frequency
 start / end flux
 flux steps
 frequency sweep range
 frequency steps
-fluxonium parameters: EC, EL, EJ
+fluxonium parameters: EC, EL, EJ, g, fr
 zero-flux current
-drive pulse duration
-gain or gain multiplier
+gain pulse duration
 ```
 
 ---
@@ -182,26 +181,10 @@ Typical outputs:
 ```text
 resonator frequency vs flux
 zero-flux current estimate
-half-flux current estimate
 fit parameters
 SNR / fit quality
 figures
 ```
-
-## Analysis
-
-The analysis may include:
-
-```text
-complex resonator fitting
-single/double hanger fit
-SNR filtering
-resonator-frequency curve extraction
-comparison with fluxonium model
-zero-flux / half-flux calibration
-```
-
-This step can be connected to an ML offset calibration pipeline if desired.
 
 ---
 
@@ -242,18 +225,6 @@ Gaussian fit parameters
 figures
 ```
 
-## Analysis
-
-The analysis usually:
-
-```text
-averages repetitions
-fits real / imaginary / magnitude / phase components
-selects the best component by SNR
-extracts f01 vs flux
-evaluates whether enough flux points pass SNR threshold
-```
-
 ## Gain Multiplier
 
 A gain multiplier can be used to scale the physical qubit drive amplitude during spectroscopy.
@@ -264,21 +235,7 @@ Example:
 gain_multiplier = 2.0
 ```
 
-means twice the applied drive amplitude is used.
-
-This is useful because the theoretical drive amplitude may not match the experimentally required amplitude due to attenuation, line loss, and device-dependent coupling.
-
-In code:
-
-```python
-final_drive_amplitude = gain_multiplier * theoretical_drive_amplitude
-```
-
-Recommended parameter description:
-
-```python
-"Multiplier for the physical qubit drive amplitude sent to the qubit during spectroscopy."
-```
+means twice the applied drive amplitude is used. This is useful because the theoretical drive amplitude may not match the experimentally required amplitude due to attenuation, line loss, and device-dependent coupling.
 
 ---
 
@@ -318,19 +275,6 @@ SNR / fit quality
 figures
 ```
 
-## Analysis
-
-The analysis may include:
-
-```text
-averaging repetitions
-projecting signal onto the best measurement axis
-fitting Rabi oscillations
-extracting Vpi(flux)
-checking edge avoidance
-checking SNR and smoothness
-```
-
 ---
 
 # 4. T1 / T2 Measurements
@@ -352,16 +296,3 @@ T2 Echo
 These protocols are shared with other single-qubit workflows and do not need to be duplicated inside the fluxonium folder unless fluxonium-specific behavior is added later.
 
 ---
-
-# Development Notes
-
-When adding or modifying a fluxonium protocol:
-
-1. Follow the `ProtocolOperation` structure.
-2. Register inputs and outputs clearly.
-3. Keep `_measure_dummy` for simulation/testing.
-4. Add or update `_measure_qick` for real hardware.
-5. Use the corresponding `single_qubit/` protocol as a template when possible.
-6. Add flux/current as an extra sweep dimension where required.
-7. Save analysis outputs and figures using `DatasetAnalysis`.
-8. Keep fluxonium-specific notes here; keep general installation and package usage in the root README.
