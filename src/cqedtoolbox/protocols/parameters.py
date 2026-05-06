@@ -778,3 +778,15 @@ class ResonatorFr(ProtocolParameterBase):
 
     def _dummy_setter(self, value):
         return self.params.readout.fr(value)
+
+
+@dataclass
+class GainMultiplier(ProtocolParameterBase):
+    name: str = field(default="gain_multiplier", init=False)
+    description: str = field(default="Multiplier for the physical qubit drive amplitude applied to the qubit (e.g. n = only 1/n amplitude reaches to the real qubit)", init=False)
+
+    def _dummy_getter(self):
+        return self.params.qubit.gain_multiplier()
+
+    def _dummy_setter(self, value):
+        return self.params.qubit.gain_multiplier(value)
