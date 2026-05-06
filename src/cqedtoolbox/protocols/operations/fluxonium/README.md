@@ -235,7 +235,7 @@ Example:
 gain_multiplier = 2.0
 ```
 
-means twice the applied drive amplitude is used. This is useful because the theoretical drive amplitude may not match the experimentally required amplitude due to attenuation, line loss, and device-dependent coupling.
+means twice the applied drive amplitude is used (due to 1/2 will be disspated before driving qubit). This is useful because the theoretical drive amplitude may not match the experimentally required amplitude due to attenuation, line loss, and device-dependent coupling.
 
 ---
 
