@@ -12,6 +12,7 @@ from labcore.analysis.fitfuncs.generic import Gaussian
 from labcore.measurement.storage import run_and_save_sweep
 from labcore.measurement.sweep import sweep_parameter
 from labcore.measurement.record import record_as
+from labcore.data.datagen import Gaussian as GaussianDataGen
 from labcore.data.datadict_storage import datadict_from_hdf5
 
 from labcore.protocols.base import (ProtocolOperation, OperationStatus, serialize_fit_params,
@@ -43,6 +44,9 @@ class PiSpecSNRThreshold(CorrectionParameter):
     def _qick_setter(self, value):
         self.params.corrections.pi_spec.snr(value)
 
+    _dummy_getter = _qick_getter
+    _dummy_setter = _qick_setter
+
 
 @dataclass
 class PiSpecMaxFitParamError(CorrectionParameter):
@@ -54,6 +58,9 @@ class PiSpecMaxFitParamError(CorrectionParameter):
 
     def _qick_setter(self, value):
         self.params.corrections.pi_spec.max_fit_param_error(value)
+
+    _dummy_getter = _qick_getter
+    _dummy_setter = _qick_setter
 
 
 @dataclass
@@ -67,6 +74,9 @@ class PiSpecAveragingFactor(CorrectionParameter):
     def _qick_setter(self, value):
         self.params.corrections.pi_spec.averaging_factor(value)
 
+    _dummy_getter = _qick_getter
+    _dummy_setter = _qick_setter
+
 
 @dataclass
 class PiSpecMaxAveragingIncreases(CorrectionParameter):
@@ -78,6 +88,9 @@ class PiSpecMaxAveragingIncreases(CorrectionParameter):
 
     def _qick_setter(self, value):
         self.params.corrections.pi_spec.max_averaging_increases(value)
+
+    _dummy_getter = _qick_getter
+    _dummy_setter = _qick_setter
 
 
 class IncreaseAveragingCorrection(Correction):
@@ -162,11 +175,8 @@ class PiSpectroscopy(ProtocolOperation):
         frequencies = np.linspace(self.start_freq(), self.end_freq(), int(self.steps()))
         center = (self.start_freq() + self.end_freq()) / 2 + self._SIM_CENTER
 
-        def generate(frequencies):
-            return (self._SIM_AMP * np.exp(-0.5 * ((frequencies - center) / self._SIM_SIGMA) ** 2)
-                    + self._SIM_NOISE_AMP * (np.random.randn() + 1j * np.random.randn()))
-
-        sweep = sweep_parameter("frequencies", frequencies, record_as(generate, "signal"))
+        generator = GaussianDataGen(x0=center, sigma=self._SIM_SIGMA, A=self._SIM_AMP, of=0, noise_std=self._SIM_NOISE_AMP, imaginary=True)
+        sweep = sweep_parameter("frequencies", frequencies, record_as(lambda frequencies: np.atleast_1d(generator.generate(np.atleast_1d(frequencies)))[0], "signal"))
         loc, _ = run_and_save_sweep(sweep, "data", self.name)
         logger.info("Dummy measurement complete")
         return loc

@@ -321,6 +321,14 @@ class SaturationSpecDriveGain(ProtocolParameterBase):
     name: str = field(default="sat_spec_drive_gain", init=False)
     description: str = field(default="Drive gain for the saturation spectroscopy pump pulse", init=False)
 
+    def _dummy_getter(self):
+        active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
+        return nestedAttributeFromString(self.params, f"{active_qubit}.pulses.const.gain")()
+
+    def _dummy_setter(self, value):
+        active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
+        return nestedAttributeFromString(self.params, f"{active_qubit}.pulses.const.gain")(value)
+
     def _qick_getter(self):
         active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
         return nestedAttributeFromString(self.params, f"{active_qubit}.pulses.const.gain")()
