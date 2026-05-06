@@ -262,6 +262,7 @@ gain steps
 drive pulse duration
 fluxonium parameters: EC, EL, EJ
 zero-flux current
+gain multiplier
 ```
 
 ## Outputs
