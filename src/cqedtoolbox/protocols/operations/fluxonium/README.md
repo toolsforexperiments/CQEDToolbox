@@ -42,7 +42,7 @@ The intended workflow is:
 ```text
 Resonator spectroscopy vs flux
         ↓
-Flux offset / zero-flux calibration
+Flux offset / zero-flux calibration (Use ML model https://github.com/Jianyaogu/Fluxonium-offset-inverse-model/tree/main if method in resonator spec vs flux works bad)
         ↓
 Fluxonium qubit / pi spectroscopy vs flux
         ↓
