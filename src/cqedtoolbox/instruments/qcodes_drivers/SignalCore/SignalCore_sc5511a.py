@@ -94,7 +94,7 @@ class SignalCore_SC5511A(Instrument):
     if platform.system() == 'Windows':
         dllpath = r"C:\Program Files\SignalCore\SC5511A\api\c\x64\sc5511a.dll"
     else:
-        dllpath = r"/home/pfafflab/Documents/drivers/Linux/libusb/lib/libsc55511a.so.1.0"
+        dllpath = r"/home/pfafflab/Documents/drivers/Linux/libusb/lib/libsc5511a.so.1.0"
 
     def __init__(self, name: str, serial_number: str,
                  dllpath: Optional[str] = None, debug=False, **kwargs: Any):
