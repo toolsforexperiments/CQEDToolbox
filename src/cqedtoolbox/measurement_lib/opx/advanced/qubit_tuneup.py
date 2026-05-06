@@ -8,7 +8,7 @@ from labcore.data.datadict_storage import load_as_xr
 from labcore.analysis.mpl import plot_fit_1d, fit_and_plot_1d
 from labcore.analysis import DatasetAnalysis
 
-from labcore.fitfuncs.generic import (
+from labcore.analysis.fitfuncs.generic import (
     Cosine,
     Gaussian,
     ExponentialDecay,
