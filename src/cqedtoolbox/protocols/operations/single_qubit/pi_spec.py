@@ -1,4 +1,5 @@
 import logging
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import numpy as np
@@ -13,7 +14,8 @@ from labcore.measurement.sweep import sweep_parameter
 from labcore.measurement.record import record_as
 from labcore.data.datadict_storage import datadict_from_hdf5
 
-from labcore.protocols.base import ProtocolOperation, OperationStatus, serialize_fit_params, ParamImprovement
+from labcore.protocols.base import (ProtocolOperation, OperationStatus, serialize_fit_params,
+                                    CorrectionParameter, CheckResult, Correction, EvaluateResult)
 from cqedtoolbox.protocols.parameters import (
     Repetition,
     PiSpecSteps,
@@ -30,9 +32,81 @@ from cqedtoolbox.measurement_lib.qick.single_transmon_v2 import PiSpecProgram
 logger = logging.getLogger(__name__)
 
 
-class PiSpectroscopy(ProtocolOperation):
+@dataclass
+class PiSpecSNRThreshold(CorrectionParameter):
+    name: str = field(default="pi_spec_snr_threshold", init=False)
+    description: str = field(default="Minimum SNR for a successful pi spectroscopy fit", init=False)
 
-    SNR_THRESHOLD = 2
+    def _qick_getter(self):
+        return self.params.corrections.pi_spec.snr()
+
+    def _qick_setter(self, value):
+        self.params.corrections.pi_spec.snr(value)
+
+
+@dataclass
+class PiSpecMaxFitParamError(CorrectionParameter):
+    name: str = field(default="pi_spec_max_fit_param_error", init=False)
+    description: str = field(default="Max allowed fractional fit parameter error (e.g. 1.0 = 100%)", init=False)
+
+    def _qick_getter(self):
+        return self.params.corrections.pi_spec.max_fit_param_error()
+
+    def _qick_setter(self, value):
+        self.params.corrections.pi_spec.max_fit_param_error(value)
+
+
+@dataclass
+class PiSpecAveragingFactor(CorrectionParameter):
+    name: str = field(default="pi_spec_averaging_factor", init=False)
+    description: str = field(default="Factor by which to multiply repetitions on retry", init=False)
+
+    def _qick_getter(self):
+        return self.params.corrections.pi_spec.averaging_factor()
+
+    def _qick_setter(self, value):
+        self.params.corrections.pi_spec.averaging_factor(value)
+
+
+@dataclass
+class PiSpecMaxAveragingIncreases(CorrectionParameter):
+    name: str = field(default="pi_spec_max_averaging_increases", init=False)
+    description: str = field(default="Maximum number of repetition increases to attempt", init=False)
+
+    def _qick_getter(self):
+        return int(self.params.corrections.pi_spec.max_averaging_increases())
+
+    def _qick_setter(self, value):
+        self.params.corrections.pi_spec.max_averaging_increases(value)
+
+
+class IncreaseAveragingCorrection(Correction):
+    name = "increase_averaging"
+    description = "Multiply repetitions by a factor to improve SNR"
+    triggered_by = "quality_check"
+
+    def __init__(self, reps_param, factor_param, max_increases_param):
+        self.reps_param = reps_param
+        self.factor_param = factor_param
+        self.max_increases_param = max_increases_param
+        self._count = 0
+        self._last_change = ""
+
+    def can_apply(self) -> bool:
+        return self._count < int(self.max_increases_param())
+
+    def apply(self) -> None:
+        old = self.reps_param()
+        new = int(old * self.factor_param())
+        self.reps_param(new)
+        self._count += 1
+        self._last_change = f"{old} → {new} reps"
+
+    def report_output(self) -> str:
+        return self._last_change
+
+
+class PiSpectroscopy(ProtocolOperation):
 
     _SIM_CENTER = 0.0
     _SIM_SIGMA = 3e6  # 3 MHz
@@ -52,10 +126,21 @@ class PiSpectroscopy(ProtocolOperation):
             readout_length=ReadoutLength(params)
         )
         self._register_outputs(
-            qubit_if=QubitFrequency(params)
+            qubit_freq=QubitFrequency(params)
         )
 
-        self.condition = f"Success if the SNR of any component (real, imaginary, or magnitude) is bigger than the current threshold of {self.SNR_THRESHOLD}"
+        self._register_correction_params(
+            snr_threshold=PiSpecSNRThreshold(params),
+            max_fit_param_error=PiSpecMaxFitParamError(params),
+            averaging_factor=PiSpecAveragingFactor(params),
+            max_averaging_increases=PiSpecMaxAveragingIncreases(params),
+        )
+
+        self._increase_averaging = IncreaseAveragingCorrection(
+            self.repetitions, self.averaging_factor, self.max_averaging_increases
+        )
+        self._register_check("quality_check", self._check_quality, self._increase_averaging)
+        self._register_success_update(self.qubit_freq, lambda: self.winner_fit.params["x0"].value)
 
         self.independents = {"frequencies": []}
         self.dependents = {"signal": []}
@@ -66,6 +151,11 @@ class PiSpectroscopy(ProtocolOperation):
         self.snr_re = None
         self.snr_imag = None
         self.snr_mag = None
+        self.winner_name = None
+        self.winner_snr = None
+        self.winner_fit = None
+        self.winner_key = None
+        self.sorted_components = None
 
     def _measure_dummy(self) -> Path:
         logger.info("Starting dummy pi spectroscopy measurement")
@@ -219,92 +309,86 @@ class PiSpectroscopy(ProtocolOperation):
             image_path_mag = ds._new_file_path(ds.savefolders[1], f"{self.name}_mag", suffix="png")
             self.figure_paths.append(image_path_mag)
 
-    def evaluate(self) -> OperationStatus:
-        """
-        Evaluate if the measurement was successful and update the qubit frequency.
-        Success criteria: At least one component (real, imag, mag) has SNR above threshold.
-        Uses the component with the highest SNR.
-        """
-        # Map component keys to figure paths (in order: real, imag, mag)
-        plot_map = {
-            "re": self.figure_paths[0].resolve(),
-            "imag": self.figure_paths[1].resolve(),
-            "mag": self.figure_paths[2].resolve()
-        }
-
-        # Determine which component has the highest SNR
+    def _check_quality(self) -> CheckResult:
         snr_dict = {
-            "Real": (self.snr_re, self.fit_result_re, "re"),
+            "Real":      (self.snr_re,   self.fit_result_re,   "re"),
             "Imaginary": (self.snr_imag, self.fit_result_imag, "imag"),
-            "Magnitude": (self.snr_mag, self.fit_result_mag, "mag")
+            "Magnitude": (self.snr_mag,  self.fit_result_mag,  "mag"),
         }
+        self.sorted_components = sorted(snr_dict.items(), key=lambda x: x[1][0], reverse=True)
+        self.winner_name, (self.winner_snr, self.winner_fit, self.winner_key) = self.sorted_components[0]
 
-        # Sort by SNR (highest first)
-        sorted_components = sorted(snr_dict.items(), key=lambda x: x[1][0], reverse=True)
-        winner_name, (winner_snr, winner_fit, winner_key) = sorted_components[0]
+        threshold = self.snr_threshold()
+        snr_passed = self.winner_snr >= threshold
+
+        max_error = self.max_fit_param_error()
+        bad_params = []
+        for pname, param in self.winner_fit.params.items():
+            if param.stderr is None:
+                bad_params.append(f"{pname}(no stderr)")
+            elif param.value != 0 and abs(param.stderr / param.value) > max_error:
+                pct = abs(param.stderr / param.value) * 100
+                bad_params.append(f"{pname}({pct:.0f}%)")
+
+        passed = snr_passed and len(bad_params) == 0
+        parts = [f"SNR={self.winner_snr:.3f} (threshold={threshold:.3f}, component={self.winner_name})"]
+        if bad_params:
+            parts.append(f"high-error params: {', '.join(bad_params)}")
+        return CheckResult("quality_check", passed, "; ".join(parts))
+
+    def correct(self, result: EvaluateResult) -> EvaluateResult:
+        # Pull all three figures before super() can auto-append the last one.
+        # figure_paths order after analyze(): [0]=real, [1]=imag, [2]=mag
+        plot_map = {}
+        if len(self.figure_paths) >= 3:
+            plot_map["re"]   = self.figure_paths[0].resolve()
+            plot_map["imag"] = self.figure_paths[1].resolve()
+            plot_map["mag"]  = self.figure_paths[2].resolve()
+        self.figure_paths.clear()  # prevent auto-append
 
         header = (f"## Pi Spectroscopy\n"
-                  f"Measured pi spectroscopy for frequencies: {self.start_freq():.3f}-{self.end_freq():.3f} MHz with a current SNR threshold of {self.SNR_THRESHOLD}\n"
+                  f"Frequencies: {self.start_freq():.3f}–{self.end_freq():.3f} MHz\n"
                   f"Data Path: `{self.data_loc}`\n\n")
+        self.report_output.append(header)
 
-        # Check if the winner's SNR is above threshold
-        if winner_snr >= self.SNR_THRESHOLD:
-            logger.info(f"{winner_name} component has highest SNR of {winner_snr:.3f}, which is above threshold of {self.SNR_THRESHOLD}. Applying new values")
+        result = super().correct(result)  # adds check table; no auto-figure since list is empty
 
-            old_value = self.qubit_if()
-            new_value = winner_fit.params["x0"].value
-
-            logger.info(f"Updating qubit frequency from {old_value} to {new_value}")
-            self.qubit_if(new_value)
-
-            self.improvements = [ParamImprovement(old_value, new_value, self.qubit_if)]
-
-            # Main section with winner
-            msg_main = (f"### **{winner_name} Component (SELECTED)**\n"
-                       f"Fit was **SUCCESSFUL** with {winner_name} SNR of {winner_snr:.3f}\n"
-                       f"{self.qubit_if.name} shift: {old_value:.3f} -> {new_value:.3f}\n"
-                       f"This component was selected because it has the highest SNR.\n\n")
-
-            winner_plot = plot_map[winner_key]
-
+        if self.sorted_components:
+            winner_name, (winner_snr, winner_fit, winner_key) = self.sorted_components[0]
             winner_report = f"**Fit Report:**\n```\n{str(winner_fit.lmfit_result.fit_report())}\n```\n\n"
 
-            # Sections for non-winners
-            other_sections = []
-            for comp_name, (comp_snr, comp_fit, comp_key) in sorted_components[1:]:
-                if comp_snr >= self.SNR_THRESHOLD:
-                    reason = f"SNR of {comp_snr:.3f} is above threshold but lower than {winner_name} (SNR={winner_snr:.3f})"
-                else:
-                    reason = f"SNR of {comp_snr:.3f} is below threshold of {self.SNR_THRESHOLD}"
+            if result.status == OperationStatus.SUCCESS:
+                self.report_output.extend([
+                    f"### **{winner_name} Component (SELECTED)**\n"
+                    f"Fit was **SUCCESSFUL** with {winner_name} SNR of {winner_snr:.3f}\n"
+                    f"This component was selected because it has the highest SNR.\n\n",
+                    plot_map.get(winner_key, ""),
+                    winner_report,
+                ])
+                for comp_name, (comp_snr, comp_fit, comp_key) in self.sorted_components[1:]:
+                    threshold = self.snr_threshold()
+                    if comp_snr >= threshold:
+                        reason = f"SNR of {comp_snr:.3f} is above threshold but lower than {winner_name} (SNR={winner_snr:.3f})"
+                    else:
+                        reason = f"SNR of {comp_snr:.3f} is below threshold of {threshold:.3f}"
+                    self.report_output.extend([
+                        f"### **{comp_name} Component (NOT SELECTED)**\n",
+                        plot_map.get(comp_key, ""),
+                        f"Not used: {reason}\n\n**Fit Report:**\n```\n{str(comp_fit.lmfit_result.fit_report())}\n```\n\n",
+                    ])
+            else:
+                self.report_output.extend([
+                    f"### **{winner_name} Component (Highest SNR)**\n"
+                    f"Fit was **UNSUCCESSFUL** with {winner_name} SNR of {winner_snr:.3f}\n"
+                    f"NO value has been changed.\n\n",
+                    plot_map.get(winner_key, ""),
+                    winner_report,
+                ])
+                for comp_name, (comp_snr, comp_fit, comp_key) in self.sorted_components[1:]:
+                    self.report_output.extend([
+                        f"### **{comp_name} Component**\n",
+                        plot_map.get(comp_key, ""),
+                        f"SNR of {comp_snr:.3f}\n\n**Fit Report:**\n```\n{str(comp_fit.lmfit_result.fit_report())}\n```\n\n",
+                    ])
 
-                other_section = f"### **{comp_name} Component (NOT SELECTED)**\n"
-                other_sections.append(other_section)
-                other_sections.append(plot_map[comp_key])
-                other_sections.append(f"Not used: {reason}\n\n**Fit Report:**\n```\n{str(comp_fit.lmfit_result.fit_report())}\n```\n\n")
-
-            self.report_output = [header, msg_main, winner_plot, winner_report] + other_sections
-
-            return OperationStatus.SUCCESS
-
-        # All components failed
-        logger.info(f"All components have SNR below threshold. Highest was {winner_name} with SNR {winner_snr:.3f}")
-
-        # Main section with best attempt
-        msg_main = (f"### **{winner_name} Component (Highest SNR)**\n"
-                   f"Fit was **UNSUCCESSFUL** with {winner_name} SNR of {winner_snr:.3f}, which is below threshold of {self.SNR_THRESHOLD}\n"
-                   f"NO value has been changed.\n\n")
-
-        winner_plot = plot_map[winner_key]
-        winner_report = f"**Fit Report:**\n```\n{str(winner_fit.lmfit_result.fit_report())}\n```\n\n"
-
-        # Sections for other components
-        other_sections = []
-        for comp_name, (comp_snr, comp_fit, comp_key) in sorted_components[1:]:
-            other_section = f"### **{comp_name} Component**\n"
-            other_sections.append(other_section)
-            other_sections.append(plot_map[comp_key])
-            other_sections.append(f"SNR of {comp_snr:.3f} is below threshold of {self.SNR_THRESHOLD}\n\n**Fit Report:**\n```\n{str(comp_fit.lmfit_result.fit_report())}\n```\n\n")
-
-        self.report_output = [header, msg_main, winner_plot, winner_report] + other_sections
-
-        return OperationStatus.FAILURE
+        return result

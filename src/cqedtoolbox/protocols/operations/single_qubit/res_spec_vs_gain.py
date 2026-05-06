@@ -1,4 +1,5 @@
 import logging
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import numpy as np
@@ -13,10 +14,10 @@ from labcore.data.datadict_storage import datadict_from_hdf5
 from labcore.measurement import sweep_parameter
 from labcore.measurement.record import recording, dep, indep
 
-from labcore.protocols.base import ProtocolOperation, OperationStatus, serialize_fit_params, ParamImprovement
+from labcore.protocols.base import (ProtocolOperation, OperationStatus, serialize_fit_params,
+                                    CorrectionParameter, CheckResult, Correction, EvaluateResult)
 from cqedtoolbox.protocols.parameters import (
     Repetition,
-    Delay,
     StartReadoutFrequency,
     EndReadoutFrequency,
     ReadoutGain,
@@ -29,10 +30,97 @@ from cqedtoolbox.measurement_lib.qick.single_transmon_v2 import FreqGainSweepPro
 logger = logging.getLogger(__name__)
 
 
-class ResonatorSpectroscopyVsGain(ProtocolOperation):
+@dataclass
+class ResSpecVsGainSNRThreshold(CorrectionParameter):
+    name: str = field(default="res_spec_vs_gain_snr_threshold", init=False)
+    description: str = field(default="SNR threshold for low-gain quality check", init=False)
 
-    SNR_THRESHOLD = 0.001
-    MAX_FREQ_DEVIATION_THRESHOLD = 0.1e6  # MHz threshold for linearity check
+    def _qick_getter(self):
+        return self.params.corrections.res_spec_vs_gain.snr()
+
+    def _qick_setter(self, v):
+        self.params.corrections.res_spec_vs_gain.snr(v)
+
+
+@dataclass
+class ResSpecVsGainMaxFitParamError(CorrectionParameter):
+    name: str = field(default="res_spec_vs_gain_max_fit_param_error", init=False)
+    description: str = field(default="Max fractional fit parameter error (e.g. 1.0 = 100%)", init=False)
+
+    def _qick_getter(self):
+        return self.params.corrections.res_spec_vs_gain.max_fit_param_error()
+
+    def _qick_setter(self, v):
+        self.params.corrections.res_spec_vs_gain.max_fit_param_error(v)
+
+
+@dataclass
+class ResSpecVsGainHighSNRThreshold(CorrectionParameter):
+    name: str = field(default="res_spec_vs_gain_high_snr_threshold", init=False)
+    description: str = field(default="High SNR threshold — at least one trace must exceed this", init=False)
+
+    def _qick_getter(self):
+        return self.params.corrections.res_spec_vs_gain.high_snr()
+
+    def _qick_setter(self, v):
+        self.params.corrections.res_spec_vs_gain.high_snr(v)
+
+
+@dataclass
+class ResSpecVsGainRepetitionFactor(CorrectionParameter):
+    name: str = field(default="res_spec_vs_gain_repetition_factor", init=False)
+    description: str = field(default="Factor by which repetitions are increased on retry", init=False)
+
+    def _qick_getter(self):
+        return self.params.corrections.res_spec_vs_gain.rep_factor()
+
+    def _qick_setter(self, v):
+        self.params.corrections.res_spec_vs_gain.rep_factor(v)
+
+
+@dataclass
+class ResSpecVsGainMaxRepetitionIncreases(CorrectionParameter):
+    name: str = field(default="res_spec_vs_gain_max_rep_increases", init=False)
+    description: str = field(default="Maximum number of repetition increases to attempt", init=False)
+
+    def _qick_getter(self):
+        return int(self.params.corrections.res_spec_vs_gain.max_rep_increases())
+
+    def _qick_setter(self, v):
+        self.params.corrections.res_spec_vs_gain.max_rep_increases(v)
+
+
+class IncreaseRepetitionsCorrection(Correction):
+    name = "increase_repetitions"
+    description = "Increase repetition count until at least one trace has high SNR"
+    triggered_by = "high_snr_check"
+
+    def __init__(self, reps_param, factor_param, max_increases_param):
+        self.reps_param = reps_param
+        self.factor_param = factor_param
+        self.max_increases_param = max_increases_param
+        self._original_reps: int | None = None
+        self._count = 0
+        self._last_change: str = ""
+
+    def can_apply(self) -> bool:
+        return self._count < int(self.max_increases_param())
+
+    def apply(self) -> None:
+        if self._original_reps is None:
+            self._original_reps = int(self.reps_param())
+        factor = self.factor_param()
+        old = int(self.reps_param())
+        new = int(self._original_reps * (factor ** (self._count + 1)))
+        self.reps_param(new)
+        self._count += 1
+        self._last_change = f"reps: {old} → {new}"
+
+    def report_output(self) -> str:
+        return self._last_change
+
+
+class ResonatorSpectroscopyVsGain(ProtocolOperation):
 
     _SIM_N_GAIN_STEPS = 11
 
@@ -53,7 +141,24 @@ class ResonatorSpectroscopyVsGain(ProtocolOperation):
             readout_gain=ReadoutGain(params)
         )
 
-        self.condition = f"Success if every trace has a higher SNR than the current threshold of {self.SNR_THRESHOLD}"
+        self._register_correction_params(
+            snr_threshold=ResSpecVsGainSNRThreshold(params),
+            max_fit_param_error=ResSpecVsGainMaxFitParamError(params),
+            high_snr_threshold=ResSpecVsGainHighSNRThreshold(params),
+            repetition_factor=ResSpecVsGainRepetitionFactor(params),
+            max_repetition_increases=ResSpecVsGainMaxRepetitionIncreases(params),
+        )
+
+        self._increase_repetitions = IncreaseRepetitionsCorrection(
+            self.repetitions,
+            self.repetition_factor,
+            self.max_repetition_increases,
+        )
+
+        self._register_check("low_gain_quality_check", self._check_low_gain_quality)
+        self._register_check("high_snr_check", self._check_high_snr, self._increase_repetitions)
+
+        self._register_success_update(self.readout_gain, lambda: self.optimal_gain)
 
         self.independents = {"frequencies": [], "gains": []}
         self.dependents = {"signal": []}
@@ -155,7 +260,7 @@ class ResonatorSpectroscopyVsGain(ProtocolOperation):
 
         return fig
 
-    def _plot_gain_vs_resonance_frequency(self, gains, res_f_arr, slope, max_dev_idx):
+    def _plot_gain_vs_resonance_frequency(self, gains, res_f_arr, optimal_gain):
         """Create gain vs resonance frequency plot"""
         fig, ax = plt.subplots()
         ax.set_title("Gain vs Resonator Frequency")
@@ -164,9 +269,19 @@ class ResonatorSpectroscopyVsGain(ProtocolOperation):
 
         ax.plot(gains, res_f_arr, marker='.', linestyle='-', label='Data')
         ax.plot([gains[0], gains[-1]], [res_f_arr[0], res_f_arr[-1]], label='Linear Fit')
-        ax.axvline(x=gains[max_dev_idx], linestyle='--', color='red', label='Max Deviation')
+        if optimal_gain is not None:
+            ax.axvline(x=optimal_gain, linestyle='--', color='red', label='Selected Gain')
         ax.legend()
 
+        return fig
+
+    def _plot_snr_vs_gain(self, gains, snr_values):
+        """Create SNR vs gain plot"""
+        fig, ax = plt.subplots()
+        ax.set_title("SNR vs Gain")
+        ax.set_xlabel("Gain")
+        ax.set_ylabel("SNR")
+        ax.plot(gains, snr_values, marker='.', linestyle='-')
         return fig
 
     def analyze(self):
@@ -193,6 +308,20 @@ class ResonatorSpectroscopyVsGain(ProtocolOperation):
                     freqs, trace_signal, f"Gain = {g}"
                 )
 
+                _excluded = {"transmission_slope", "phase_slope", "phase_offset"}
+                _null_stderr_params = [
+                    pname for pname, param in ret.fit_result.params.items()
+                    if pname not in _excluded and param.stderr is None
+                ]
+                if _null_stderr_params:
+                    logger.warning(
+                        f"Trace {i} (gain={g}): stderr is None for params "
+                        f"{_null_stderr_params} — re-fitting"
+                    )
+                    ret = ResonatorSpectroscopy.add_mag_and_unwind_and_fit(
+                        freqs, trace_signal, f"Gain = {g}"
+                    )
+
                 self.fit_results.append(ret.fit_result)
                 self.snr_values.append(ret.snr)
                 res_f_arr.append(ret.fit_result.params["f_0"].value)
@@ -212,20 +341,43 @@ class ResonatorSpectroscopyVsGain(ProtocolOperation):
 
             self.resonance_frequencies = res_f_arr
 
-            # Calculate linearity and find optimal gain
+            # Find optimal gain: highest-SNR trace that passes the full quality check
+            snr_threshold = self.snr_threshold()
+            max_error = self.max_fit_param_error()
+            passing_indices = []
+            for i, (snr, fit) in enumerate(zip(self.snr_values, self.fit_results)):
+                if snr < snr_threshold:
+                    continue
+                bad_fit = any(
+                    (param.stderr is None or param.value == 0 or
+                     abs(param.stderr / param.value) > max_error)
+                    for pname, param in fit.params.items()
+                    if pname not in ["transmission_slope", "phase_slope", "phase_offset"]
+                )
+                if not bad_fit:
+                    passing_indices.append(i)
+
+            if passing_indices:
+                best_idx = max(passing_indices, key=lambda i: self.snr_values[i])
+                self.optimal_gain = gains[best_idx]
+            else:
+                self.optimal_gain = None
+
+            # SNR vs gain plot (appended before gain_vs_frequency)
+            snr_fig = self._plot_snr_vs_gain(gains, self.snr_values)
+            ds.add_figure("snr_vs_gain", fig=snr_fig)
+            image_path = ds._new_file_path(ds.savefolders[1], "snr_vs_gain", suffix="png")
+            self.figure_paths.append(image_path)
+
+            # Linearity info (kept for the plot and stored data)
             self.slope = (res_f_arr[-1] - res_f_arr[0]) / (gains[-1] - gains[0])
-            self.deviations = []
-            for g, f in zip(gains, res_f_arr):
-                val = self.slope * (g - gains[0]) + res_f_arr[0]
-                self.deviations.append(np.abs(f - val))
+            self.deviations = [np.abs(f - (self.slope * (g - gains[0]) + res_f_arr[0]))
+                               for g, f in zip(gains, res_f_arr)]
+            self.max_deviation = max(self.deviations)
 
-            max_dev_idx = np.argmax(self.deviations)
-            self.max_deviation = self.deviations[max_dev_idx]
-            self.optimal_gain = gains[max_dev_idx]
-
-            # Create gain vs resonance frequency plot
+            # Create gain vs resonance frequency plot (last)
             gain_vs_freq_fig = self._plot_gain_vs_resonance_frequency(
-                gains, res_f_arr, self.slope, max_dev_idx
+                gains, res_f_arr, self.optimal_gain
             )
             ds.add_figure("gain_vs_frequency", fig=gain_vs_freq_fig)
 
@@ -241,86 +393,73 @@ class ResonatorSpectroscopyVsGain(ProtocolOperation):
                 slope=self.slope
             )
 
-    def evaluate(self) -> OperationStatus:
-        """
-        Evaluate if the measurement was successful and update the optimal gain.
-        Success criteria:
-        1. All traces have SNR above threshold
-        2. Maximum deviation from linearity is within acceptable range
-        """
-        current_report = []
-        header = (f"## Resonator Spectroscopy vs Gain \n"
-                  f"Measured Resonator spectroscopy for frequencies: {self.start_frequency():.3f}-{self.end_frequency():.3f} MHz\n"
-                  f"Gain range: {self.start_gain():.3f}-{self.end_gain():.3f}\n"
-                  f"SNR threshold: {self.SNR_THRESHOLD}, Max deviation threshold: {self.MAX_FREQ_DEVIATION_THRESHOLD} MHz\n"
+    def _check_low_gain_quality(self) -> CheckResult:
+        """Quality check (SNR + fit error) for the first 50% of gain traces."""
+        n_low = max(1, len(self.snr_values) // 2)
+        threshold = self.snr_threshold()
+        max_error = self.max_fit_param_error()
+
+        failures = []
+        for i in range(n_low):
+            snr = self.snr_values[i]
+            fit = self.fit_results[i]
+            if snr < threshold:
+                failures.append(f"trace {i}: SNR={snr:.3f} < {threshold:.3f}")
+                continue
+            for pname, param in fit.params.items():
+                if pname in ["transmission_slope", "phase_slope", "phase_offset"]:
+                    continue
+                if param.stderr is None:
+                    failures.append(f"trace {i}/{pname}: no stderr")
+                elif param.value == 0 or abs(param.stderr / param.value) > max_error:
+                    pct = abs(param.stderr / param.value) * 100 if param.value != 0 else float("inf")
+                    failures.append(f"trace {i}/{pname}: {pct:.0f}%")
+
+        passed = len(failures) == 0
+        desc = (f"first {n_low} traces pass quality check" if passed
+                else "; ".join(failures))
+        return CheckResult("low_gain_quality_check", passed, desc)
+
+    def _check_high_snr(self) -> CheckResult:
+        """At least one trace must exceed the high SNR threshold."""
+        threshold = self.high_snr_threshold()
+        best = max(self.snr_values)
+        passed = best >= threshold
+        desc = (f"best SNR={best:.3f} ≥ {threshold:.3f}" if passed
+                else f"best SNR={best:.3f} < {threshold:.3f} — no trace meets high-SNR threshold")
+        return CheckResult("high_snr_check", passed, desc)
+
+    def correct(self, result: EvaluateResult) -> EvaluateResult:
+        # figure_paths order: [0]=colorbar, [1..N-1]=traces, [-2]=snr_vs_gain, [-1]=gain_vs_freq
+        colorbar_plot = self.figure_paths.pop(0) if len(self.figure_paths) >= 3 else None
+        gain_vs_freq_plot = self.figure_paths.pop(-1) if self.figure_paths else None
+        snr_vs_gain_plot = self.figure_paths.pop(-1) if self.figure_paths else None
+        trace_figures = list(self.figure_paths)
+        self.figure_paths.clear()
+
+        header = (f"## Resonator Spectroscopy vs Gain\n"
+                  f"Frequencies: {self.start_frequency():.3f}–{self.end_frequency():.3f} MHz, "
+                  f"Gains: {self.start_gain():.3f}–{self.end_gain():.3f}\n"
                   f"Data Path: `{self.data_loc}`\n\n")
-        current_report.append(header)
+        self.report_output.extend([
+            header,
+            "### Main Plots\n",
+            "**Magnitude Colorbar:**\n", colorbar_plot,
+            "**Gain vs Frequency:**\n", gain_vs_freq_plot,
+            "**SNR vs Gain:**\n", snr_vs_gain_plot,
+        ])
 
-        # Add main plots (magnitude colorbar and gain vs frequency)
-        main_plots = "### Main Plots\n"
-        current_report.append(main_plots)
+        result = super().correct(result)  # check table + success update (writes readout_gain)
 
-        color_bar_section = "**Magnitude Colorbar:**\n"
-        color_bar_plot = self.figure_paths.pop(0)
-        gain_vs_frequency_section = "**Gain vs Frequency:**\n"
-        gain_vs_frequency_plot = self.figure_paths.pop(-1)
+        if result.status == OperationStatus.SUCCESS:
+            gains = self.independents["gains"][0]
+            self.report_output.append("\n### Individual Gain Traces\n")
+            for i, (fig_path, g) in enumerate(zip(trace_figures, gains)):
+                self.report_output.extend([
+                    f"\n**Trace {i}: Gain = {g:.3f}**\n"
+                    f"- SNR: {self.snr_values[i]:.3f}\n"
+                    f"- f_0: {self.resonance_frequencies[i]:.3f} MHz\n",
+                    fig_path,
+                ])
 
-        current_report.append(color_bar_section)
-        current_report.append(color_bar_plot)
-        current_report.append(gain_vs_frequency_section)
-        current_report.append(gain_vs_frequency_plot)
-
-
-        # Check SNR for all traces
-        if not all(snr >= self.SNR_THRESHOLD for snr in self.snr_values):
-            failed_snr_indices = [i for i, snr in enumerate(self.snr_values) if snr < self.SNR_THRESHOLD]
-            msg = (f"Fit was **UNSUCCESSFUL** - Some traces have SNR below threshold {self.SNR_THRESHOLD}\n"
-                   f"Failed trace indices: {failed_snr_indices}\n"
-                   f"SNR values: {[f'{snr:.3f}' for snr in self.snr_values]}\n")
-            current_report.append(msg)
-            self.report_output = current_report
-            logger.warning(f"Some traces have SNR below threshold {self.SNR_THRESHOLD}")
-            return OperationStatus.FAILURE
-
-        # Check deviation from linearity using pre-calculated values
-        if self.max_deviation > self.MAX_FREQ_DEVIATION_THRESHOLD:
-            msg = (f"Fit was **UNSUCCESSFUL** - Maximum frequency deviation {self.max_deviation:.3f} Hz exceeds threshold {self.MAX_FREQ_DEVIATION_THRESHOLD} MHz\n"
-                   f"Linearity slope: {self.slope:.6f} MHz/gain\n"
-                   f"Max deviation: {self.max_deviation:.3f} MHz\n")
-            current_report.append(msg)
-            self.report_output = current_report
-            logger.warning(f"Maximum frequency deviation {self.max_deviation:.3f} Hz exceeds threshold {self.MAX_FREQ_DEVIATION_THRESHOLD} MHz")
-            return OperationStatus.FAILURE
-
-        # Update the optimal gain parameter
-        old_value = self.readout_gain()
-        new_value = self.optimal_gain
-
-        logger.info(f"Updating gain from {old_value} to {new_value}")
-        self.readout_gain(new_value)
-
-        self.improvements = [ParamImprovement(old_value, new_value, self.readout_gain)]
-
-        msg = (f"Fit was **SUCCESSFUL**\n"
-               f"{self.readout_gain.name} update: {old_value:.3f} -> {new_value:.3f}\n"
-               f"Linearity slope: {self.slope:.6f} MHz/gain\n"
-               f"Max deviation: {self.max_deviation:.3f} MHz\n"
-               f"All {len(self.snr_values)} traces have SNR >= {self.SNR_THRESHOLD}\n")
-
-        current_report.append(msg)
-
-
-        trace_section = "\n### Individual Gain Traces\n"
-        current_report.append(trace_section)
-        for i, (fig_path, g) in enumerate(zip(self.figure_paths, self.independents["gains"][0])):
-
-            trace_info = (f"\n**Trace {i}: Gain = {g:.3f}**\n"
-                         f"- SNR: {self.snr_values[i]:.3f}\n"
-                         f"- f_0: {self.resonance_frequencies[i]:.3f} MHz\n")
-            current_report.append(trace_info)
-            current_report.append(fig_path)
-
-        self.report_output = current_report
-
-        logger.info(f"Evaluation successful. Optimal gain: {self.optimal_gain}")
-        return OperationStatus.SUCCESS
+        return result

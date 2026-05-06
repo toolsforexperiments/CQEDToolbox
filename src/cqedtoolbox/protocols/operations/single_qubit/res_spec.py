@@ -1,6 +1,6 @@
 import logging
 from pathlib import Path
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
 from numpy.typing import ArrayLike
@@ -11,7 +11,8 @@ from labcore.measurement.storage import run_and_save_sweep
 from labcore.data.datadict_storage import datadict_from_hdf5
 from labcore.measurement import sweep_parameter, record_as
 
-from labcore.protocols.base import ProtocolOperation, OperationStatus, serialize_fit_params, ParamImprovement
+from labcore.protocols.base import (ProtocolOperation, OperationStatus, serialize_fit_params,
+                                    ParamImprovement, CorrectionParameter, CheckResult, Correction)
 from cqedtoolbox.protocols.parameters import (Repetition,
                                               ResonatorSpecSteps, ReadoutGain, ReadoutLength, StartReadoutFrequency,
                                               EndReadoutFrequency, ReadoutFrequency)
@@ -50,9 +51,208 @@ class SyntheticHangerResonatorData:
         response = self.A * (1 - (Q_l / Q_e_complex) / (1 + 2j * Q_l * (frequencies - self.f0) / self.f0))
         return response + self.noise_amp * (np.random.randn() + 1j * np.random.randn())
 
-class ResonatorSpectroscopy(ProtocolOperation):
 
-    SNR_THRESHOLD = 2
+@dataclass
+class SNRThreshold(CorrectionParameter):
+    name: str = field(default="resonator_spec_SNR_threshold", init=False)
+    description: str = field(default="SNR threshold", init=False)
+
+    def _qick_getter(self):
+        return self.params.corrections.res_spec.snr()
+
+    def _qick_setter(self, value):
+        self.params.corrections.res_spec.snr(value)
+
+
+@dataclass
+class MaxWindowShifts(CorrectionParameter):
+    name: str = field(default="res_spec_max_window_shifts", init=False)
+    description: str = field(default="Number of ±n window shifts to try", init=False)
+
+    def _qick_getter(self):
+        return int(self.params.corrections.res_spec.max_window_shifts())
+
+    def _qick_setter(self, value):
+        self.params.corrections.res_spec.max_window_shifts(value)
+
+
+@dataclass
+class SamplingIncreaseFactor(CorrectionParameter):
+    name: str = field(default="res_spec_sampling_increase_factor", init=False)
+    description: str = field(default="Factor by which to increase frequency steps", init=False)
+
+    def _qick_getter(self):
+        return self.params.corrections.res_spec.sampling_factor()
+
+    def _qick_setter(self, value):
+        self.params.corrections.res_spec.sampling_factor(value)
+
+
+@dataclass
+class MaxSamplingIncreases(CorrectionParameter):
+    name: str = field(default="res_spec_max_sampling_increases", init=False)
+    description: str = field(default="Maximum number of sampling rate increases to try", init=False)
+
+    def _qick_getter(self):
+        return int(self.params.corrections.res_spec.max_sampling_increases())
+
+    def _qick_setter(self, value):
+        self.params.corrections.res_spec.max_sampling_increases(value)
+
+
+@dataclass
+class AveragingIncreaseFactor(CorrectionParameter):
+    name: str = field(default="res_spec_averaging_increase_factor", init=False)
+    description: str = field(default="Factor by which to increase repetitions", init=False)
+
+    def _qick_getter(self):
+        return self.params.corrections.res_spec.averaging_factor()
+
+    def _qick_setter(self, value):
+        self.params.corrections.res_spec.averaging_factor(value)
+
+
+@dataclass
+class MaxAveragingIncreases(CorrectionParameter):
+    name: str = field(default="res_spec_max_averaging_increases", init=False)
+    description: str = field(default="Maximum number of averaging increases to try", init=False)
+
+    def _qick_getter(self):
+        return int(self.params.corrections.res_spec.max_averaging_increases())
+
+    def _qick_setter(self, value):
+        self.params.corrections.res_spec.max_averaging_increases(value)
+
+
+@dataclass
+class MaxFitParamError(CorrectionParameter):
+    name: str = field(default="res_spec_max_fit_param_error", init=False)
+    description: str = field(default="Maximum allowed fractional fit parameter error (e.g. 1.0 = 100%)", init=False)
+
+    def _qick_getter(self):
+        return self.params.corrections.res_spec.max_fit_param_error()
+
+    def _qick_setter(self, value):
+        self.params.corrections.res_spec.max_fit_param_error(value)
+
+
+class WindowShiftCorrection(Correction):
+    name = "window_shift"
+    description = "Shift measurement window by multiples of the original window span"
+    triggered_by = "snr_check"
+
+    def __init__(self, start_param, end_param, max_shifts_param):
+        self.start_param = start_param
+        self.end_param = end_param
+        self.max_shifts_param = max_shifts_param
+        self._original_start: float | None = None
+        self._original_end: float | None = None
+        self._idx = 0
+        self._last_new_start: float | None = None
+        self._last_new_end: float | None = None
+
+    @staticmethod
+    def _shift_multiplier(idx: int) -> int:
+        """idx 0 → +1, 1 → -1, 2 → +2, 3 → -2, ..."""
+        n = idx // 2 + 1
+        return n if idx % 2 == 0 else -n
+
+    def can_apply(self) -> bool:
+        return self._idx < int(self.max_shifts_param()) * 2
+
+    def apply(self) -> None:
+        if self._original_start is None:
+            self._original_start = self.start_param()
+            self._original_end = self.end_param()
+        span = self._original_end - self._original_start
+        shift = self._shift_multiplier(self._idx) * span
+        self._last_new_start = self._original_start + shift
+        self._last_new_end = self._original_end + shift
+        self.start_param(self._last_new_start)
+        self.end_param(self._last_new_end)
+        self._idx += 1
+
+    def report_output(self) -> str:
+        if self._last_new_start is None:
+            return ""
+        return (f"[{self._last_new_start:.4f}, {self._last_new_end :.4f}] MHz"
+                f" (shift={(self._last_new_start - self._original_start):+.1f} MHz)")
+
+    def reset(self) -> None:
+        """Restore original window and reset index. Called by higher-level corrections."""
+        if self._original_start is not None:
+            self.start_param(self._original_start)
+            self.end_param(self._original_end)
+        self._idx = 0
+
+
+class IncreaseSamplingRateCorrection(Correction):
+    name = "increase_sampling_rate"
+    description = "Increase frequency step count and reset window shift"
+    triggered_by = "snr_check"
+
+    def __init__(self, steps_param, window_correction: WindowShiftCorrection,
+                 factor_param, max_increases_param):
+        self.steps_param = steps_param
+        self.window_correction = window_correction
+        self.factor_param = factor_param
+        self.max_increases_param = max_increases_param
+        self._original_steps: int | None = None
+        self._count = 0
+        self._last_change: str = ""
+
+    def can_apply(self) -> bool:
+        return self._count < int(self.max_increases_param())
+
+    def apply(self) -> None:
+        if self._original_steps is None:
+            self._original_steps = int(self.steps_param())
+        factor = self.factor_param()
+        old = int(self.steps_param())
+        new = int(self._original_steps * (factor ** (self._count + 1)))
+        self.steps_param(new)
+        self._count += 1
+        self._last_change = f"steps: {old} → {new}"
+        self.window_correction.reset()
+
+    def report_output(self) -> str:
+        return self._last_change
+
+
+class IncreaseAveragingCorrection(Correction):
+    name = "increase_averaging"
+    description = "Increase repetitions and reset window shift"
+    triggered_by = "snr_check"
+
+    def __init__(self, reps_param, window_correction: WindowShiftCorrection,
+                 factor_param, max_increases_param):
+        self.reps_param = reps_param
+        self.window_correction = window_correction
+        self.factor_param = factor_param
+        self.max_increases_param = max_increases_param
+        self._original_reps: int | None = None
+        self._count = 0
+        self._last_change: str = ""
+
+    def can_apply(self) -> bool:
+        return self._count < int(self.max_increases_param())
+
+    def apply(self) -> None:
+        if self._original_reps is None:
+            self._original_reps = int(self.reps_param())
+        factor = self.factor_param()
+        old = int(self.reps_param())
+        new = int(self._original_reps * (factor ** (self._count + 1)))
+        self.reps_param(new)
+        self._count += 1
+        self._last_change = f"reps: {old} → {new}"
+        self.window_correction.reset()
+
+    def report_output(self) -> str:
+        return self._last_change
+
+
+class ResonatorSpectroscopy(ProtocolOperation):
 
     _SIM_F0 = 7e9
     _SIM_QI = 20e3
@@ -76,9 +276,59 @@ class ResonatorSpectroscopy(ProtocolOperation):
         self._register_outputs(
             readout_freq=ReadoutFrequency(params),
         )
+
+        self._register_correction_params(
+            snr_threshold=SNRThreshold(params),
+            max_window_shifts=MaxWindowShifts(params),
+            sampling_increase_factor=SamplingIncreaseFactor(params),
+            max_sampling_increases=MaxSamplingIncreases(params),
+            averaging_increase_factor=AveragingIncreaseFactor(params),
+            max_averaging_increases=MaxAveragingIncreases(params),
+            max_fit_param_error=MaxFitParamError(params),
+        )
+
         self.params = params
 
-        self.condition = f"Success if the SNR of the measurement is bigger than the current threshold of {self.SNR_THRESHOLD}"
+        self._window_shift = WindowShiftCorrection(
+            self.start_frequency,
+            self.end_frequency,
+            self.max_window_shifts,
+        )
+        self._increase_sampling = IncreaseSamplingRateCorrection(
+            self.steps,
+            self._window_shift,
+            self.sampling_increase_factor,
+            self.max_sampling_increases,
+        )
+        self._increase_averaging = IncreaseAveragingCorrection(
+            self.repetitions,
+            self._window_shift,
+            self.averaging_increase_factor,
+            self.max_averaging_increases,
+        )
+
+        self._register_check(
+            "quality_check",
+            self._check_quality,
+            [self._window_shift, self._increase_sampling, self._increase_averaging],
+        )
+
+        self._register_success_update(
+            self.readout_freq,
+            lambda: self.fit_result.params["f_0"].value,
+        )
+
+        self._register_success_update(
+            self.start_frequency,
+            lambda: self.fit_result.params["f_0"].value - 5,
+        )
+
+        self._register_success_update(
+            self.end_frequency,
+            lambda: self.fit_result.params["f_0"].value + 5,
+        )
+
+        self.condition = f"Success if the SNR of the measurement is bigger than the current threshold of " # {self.SNR_THRESHOLD}"
 
         self.independents = {"frequencies": []}
         self.dependents = {"signal": []}
@@ -88,8 +338,6 @@ class ResonatorSpectroscopy(ProtocolOperation):
         self.snr = None
         self.fit_result = None
         self.improvements = None
-
-        self.test_all_params()
 
     def _measure_qick(self) -> Path:
         logger.info("Starting qick resonator spectroscopy measurement")
@@ -197,38 +445,30 @@ class ResonatorSpectroscopy(ProtocolOperation):
             image_path = ds._new_file_path(ds.savefolders[1], self.name, suffix="png")
             self.figure_paths.append(image_path)
 
-    def evaluate(self) -> OperationStatus:
+    def _check_quality(self) -> CheckResult:
+        if self.snr is None or self.fit_result is None:
+            raise RuntimeError("SNR and fit result must be set before checking quality")
 
-        header = (f"## Resonator Spectroscopy \n"
-                  f"Measured Resonator spectroscopy for frequencies: {self.independents['frequencies'][0]:.3f}-{self.independents['frequencies'][-1]:.3f} with a current SNR threshold of {self.SNR_THRESHOLD}\n"
-                  f"Data Path: `{self.data_loc}`"
-                  f"Plot: \n")
-        plot_image = self.figure_paths[0].resolve()
+        threshold = self.snr_threshold()
+        snr_passed = self.snr >= threshold
 
-        if self.snr >= self.SNR_THRESHOLD:
+        max_error = self.max_fit_param_error()
+        bad_params = []
+        for pname, param in self.fit_result.params.items():
+            if pname in ["transmission_slope", "phase_slope", "phase_offset"]:
+                continue
+            if param.stderr is None:
+                bad_params.append(f"{pname}(no stderr)")
+            elif param.value == 0 or abs(param.stderr / param.value) > max_error:
+                pct = abs(param.stderr / param.value) * 100 if param.value != 0 else float("inf")
+                bad_params.append(f"{pname}({pct:.0f}%)")
 
-            logger.info(f"snr of {self.snr} is bigger than threshold of {self.SNR_THRESHOLD}. Applying new values")
+        fit_passed = len(bad_params) == 0
+        passed = snr_passed and fit_passed
 
-            old_value = self.readout_freq()
-            new_value = self.fit_result.params["f_0"].value
+        parts = [f"SNR={self.snr:.3f} (threshold={threshold:.3f})"]
+        if bad_params:
+            parts.append(f"high-error params: {', '.join(bad_params)}")
 
-            logger.info(f"Updating f_0 from {old_value} to {new_value}")
-            self.readout_freq(new_value)
-            self.improvements = [ParamImprovement(old_value, new_value, self.readout_freq)]
-
-            msg_2 = (f"Fit was **SUCCESSFUL** with and SNR of {self.snr:.3f}. \n"
-                     f"{self.readout_freq.name} shift: {old_value:.3f} -> {new_value:.3f} \n"
-                     f" Fit Report: \n \n ```\n{str(self.fit_result.lmfit_result.fit_report())}\n``` \n")
-
-            self.report_output = [header, plot_image, msg_2]
-
-            return OperationStatus.SUCCESS
-
-        logger.info(f"snr of {self.snr} is smaller than threshold of {self.SNR_THRESHOLD}. Evaluation failed")
-
-        msg_2 = (f"Fit was **UNSUCCESSFUL** with and SNR of {self.snr:.3f}. \n"
-                 f"NO value has been changed. \n Fit Report: {str(self.fit_result.lmfit_result.fit_report())} \n")
-        self.report_output = [header, plot_image, msg_2]
-
-        return OperationStatus.FAILURE
+        return CheckResult("quality_check", passed, "; ".join(parts))
 
