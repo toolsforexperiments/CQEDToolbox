@@ -3,18 +3,6 @@ A driver to control the DM Technologies Multichannel current source
 
 @author: Kaushik & Angela Kou
 
-"""
-
-import logging
-
-import numpy as np
-import re
-from typing import Literal
-import pyvisa
-import time
-from qcodes import (VisaInstrument, Parameter, ParameterWithSetpoints, InstrumentChannel,validators as vals)
-
-"""
 Some basic concepts for this current source:
 
 VisaInstrument: 
@@ -30,10 +18,16 @@ Channel:
 
 """
 
-"""
-Helper Functions
+import logging
 
-"""
+import numpy as np
+import re
+from typing import Literal
+import pyvisa
+import time
+from qcodes import (VisaInstrument, Parameter, ParameterWithSetpoints, InstrumentChannel,validators as vals)
+
+
 def arange_inclusive(start, stop, step):
     """
     Ensures the endpoint is included for both increasing 
@@ -44,9 +38,6 @@ def arange_inclusive(start, stop, step):
     return np.round(np.linspace(start, stop, num), 2)
 
 
-"""
-Drivers
-"""
 
 class DMTSingleChannel(InstrumentChannel):
     """
@@ -83,7 +74,6 @@ class DMTSingleChannel(InstrumentChannel):
         """Check range and current of the channel"""
         check_response = self.ask('!chk;'+self.channel)
         params = check_response.strip().split(';')
-        # curr_range = float(params[2].rstrip("mA"))
         curr_value = float(params[3].rstrip("uA"))
         return curr_value
     
@@ -92,7 +82,6 @@ class DMTSingleChannel(InstrumentChannel):
         check_response = self.ask('!chk;'+self.channel)
         params = check_response.strip().split(';')
         curr_range = float(params[2].rstrip("mA"))
-        # curr_value = float(params[3].rstrip("uA"))
         return curr_range
 
     def set_range(self, new_range: Literal[4,40]):
@@ -113,14 +102,12 @@ class DMTSingleChannel(InstrumentChannel):
         """Set current value for the channel"""
         curr_range = self.get_range()
         temperature = self.root_instrument.get_temp()
-        # print(self.ask("!help"))
         if abs(new_current/1000.0) > abs(curr_range):
             raise TypeError("The value you are setting is larger than the range")
         elif any(ele > 58 for ele in temperature):
             raise TypeError("The source is above 58C. Cool it down before proceeding")
         else:
            set_string="!set;"+self.channel+";"+str(int(curr_range))+"mA;"+str(new_current)
-           print(set_string)
            success = self.ask(set_string)
            if len(success.strip().split(';'))<3:
                raise TypeError("The source did not accept your input.")
@@ -132,7 +119,6 @@ class DMTSingleChannel(InstrumentChannel):
         curr_value = self.get_current()
         curr_ramp_vals = arange_inclusive(curr_value, new_current +(step/2), step)
         for curr in curr_ramp_vals:
-            print(curr)
             self.set_current(curr)
             time.sleep(delay)
         self.set_current(new_current)
