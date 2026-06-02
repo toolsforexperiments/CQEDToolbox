@@ -40,8 +40,6 @@ def arange_inclusive(start, stop, step):
 
 
 class DMTSingleChannel(InstrumentChannel):
-    """
-    """
     def __init__(
             self, 
             parent: 'DMTCurrentSource', 
