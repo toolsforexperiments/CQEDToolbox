@@ -13,7 +13,7 @@ import platform
 from typing import Any, Dict, Optional, List
 
 from qcodes import (Instrument, validators as vals)
-from qcodes.utils.validators import Numbers
+from qcodes.validators.validators import Numbers
 
 
 class Device_rf_params_t(ctypes.Structure):

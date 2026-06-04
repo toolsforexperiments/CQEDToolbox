@@ -11,7 +11,7 @@ from typing import Any, Union, Dict, List, Tuple
 
 import numpy as np
 from qcodes import (VisaInstrument, Parameter, ParameterWithSetpoints, InstrumentChannel, validators as vals)
-from qcodes.instrument.parameter import ParamRawDataType
+from qcodes.parameters.parameter_base import ParamRawDataType
 
 """
 Some basic concepts for this VNA:

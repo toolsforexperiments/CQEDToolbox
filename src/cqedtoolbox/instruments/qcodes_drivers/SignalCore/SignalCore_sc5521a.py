@@ -6,7 +6,7 @@ import os #for communicating with the operating system. Managing files+
 import sys #for accessing what the python intepreter is seeing
 from typing import Dict, Optional # for talking to earlier versions of python and defines standard notations
 from qcodes import Instrument #Intrument class of the qcodes package
-from qcodes.utils.validators import Enum,Numbers,Ints,Multiples,PermissiveMultiples
+from qcodes.validators.validators import Enum,Numbers,Ints,Multiples,PermissiveMultiples
 #validators check if an arguement is of a certain type. 
 #Enum requires that ones of a provided set of values match the arguement
 

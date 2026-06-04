@@ -1,10 +1,10 @@
 from functools import partial
 from typing import Optional, Union, Any
 
-from qcodes.instrument.parameter import DelegateParameter
+from qcodes.parameters.delegate_parameter import DelegateParameter
 from qcodes.instrument.visa import VisaInstrument
 from qcodes.instrument.channel import InstrumentChannel
-from qcodes.utils.validators import Numbers, Bool, Enum, Ints
+from qcodes.validators.validators import Numbers, Bool, Enum, Ints
 
 
 def float_round(val: float) -> int:
