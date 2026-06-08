@@ -27,13 +27,6 @@ class qcodes_KeysightN5222B(N52xx.PNABase):
 
 
 class KeysightN5222B(qcodes_KeysightN5222B):
-    # def __init__(self, name: str, address: str, **kwargs: Any):
-    #     """Pfafflab Driver for Keysight PNA N5222B."""
-    #     super().__init__(
-    #         name,
-    #         address,
-    #         **kwargs)
-        
 
     def set_port_freq(self,range_no,start_freq,stop_freq):
         self.write(f'SENS:FOM:RANG{range_no}:FREQ:STAR {start_freq}' ) 
