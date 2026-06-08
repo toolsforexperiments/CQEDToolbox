@@ -45,7 +45,7 @@ class DMTSingleChannel(InstrumentChannel):
             parent: 'DMTCurrentSource', 
             name: str, 
             channel: str,
-            **kwargs:"Unpack[InstrumentBaseKWArgs]",
+            **kwargs,
             ) -> None:
         if channel not in ["1","2","3","4","5","6","7","8"]:
             raise ValueError('channel must be an integer string from 1 to 8')

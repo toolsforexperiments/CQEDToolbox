@@ -18,7 +18,7 @@ from qm.qua import (
 )
 
 from labcore.measurement import independent
-from labcore.instruments.opx.sweep import (
+from cqedtoolbox.instruments.opx.sweep import (
     RecordOPXdata,
     ComplexOPXData,
     TimedOPXData,
