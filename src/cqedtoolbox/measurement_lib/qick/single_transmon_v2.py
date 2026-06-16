@@ -339,6 +339,8 @@ class T1Program(AveragerProgramV2):
     Measures the T1 time of the qubit.
     '''
     def _initialize(self, cfg):
+        if cfg["n_echoes"] != 0:
+            raise ValueError("n_echoes should be 0 for T1 program!")
         ro_adc_ch = cfg['ro_adc_ch']
         ro_dac_ch = cfg['ro_dac_ch']
         q_dac_ch = cfg['q_dac_ch']
@@ -392,6 +394,8 @@ class T2RProgram(AveragerProgramV2):
     Measures the T2 Ramsey time of the qubit by the Ramsey measurement.
     '''
     def _initialize(self, cfg):
+        if cfg["n_echoes"] != 0:
+            raise ValueError("n_echoes should be 0 for T2R program!")
         ro_adc_ch = cfg['ro_adc_ch']
         ro_dac_ch = cfg['ro_dac_ch']
         q_dac_ch = cfg['q_dac_ch']
