@@ -11,6 +11,7 @@ from labcore.analysis import DatasetAnalysis
 from labcore.analysis.fitfuncs.generic import Cosine
 from labcore.measurement.storage import run_and_save_sweep
 from labcore.measurement import sweep_parameter, record_as
+from labcore.data.datagen import Sine
 from labcore.data.datadict_storage import datadict_from_hdf5
 
 from labcore.protocols.base import (
@@ -42,6 +43,8 @@ class SNRThreshold(CorrectionParameter):
 
     def _qick_getter(self): return self.params.corrections.power_rabi.snr()
     def _qick_setter(self, v): self.params.corrections.power_rabi.snr(v)
+    _dummy_getter = _qick_getter
+    _dummy_setter = _qick_setter
 
 
 @dataclass
@@ -51,6 +54,8 @@ class MaxFitParamError(CorrectionParameter):
 
     def _qick_getter(self): return self.params.corrections.power_rabi.max_fit_param_error()
     def _qick_setter(self, v): self.params.corrections.power_rabi.max_fit_param_error(v)
+    _dummy_getter = _qick_getter
+    _dummy_setter = _qick_setter
 
 
 @dataclass
@@ -60,6 +65,8 @@ class AveragingIncreaseFactor(CorrectionParameter):
 
     def _qick_getter(self): return self.params.corrections.power_rabi.averaging_factor()
     def _qick_setter(self, v): self.params.corrections.power_rabi.averaging_factor(v)
+    _dummy_getter = _qick_getter
+    _dummy_setter = _qick_setter
 
 
 @dataclass
@@ -69,6 +76,8 @@ class MaxAveragingIncreases(CorrectionParameter):
 
     def _qick_getter(self): return int(self.params.corrections.power_rabi.max_averaging_increases())
     def _qick_setter(self, v): self.params.corrections.power_rabi.max_averaging_increases(v)
+    _dummy_getter = _qick_getter
+    _dummy_setter = _qick_setter
 
 
 @dataclass
@@ -78,6 +87,8 @@ class SamplingIncreaseFactor(CorrectionParameter):
 
     def _qick_getter(self): return self.params.corrections.power_rabi.sampling_factor()
     def _qick_setter(self, v): self.params.corrections.power_rabi.sampling_factor(v)
+    _dummy_getter = _qick_getter
+    _dummy_setter = _qick_setter
 
 
 @dataclass
@@ -87,6 +98,8 @@ class MaxSamplingIncreases(CorrectionParameter):
 
     def _qick_getter(self): return int(self.params.corrections.power_rabi.max_sampling_increases())
     def _qick_setter(self, v): self.params.corrections.power_rabi.max_sampling_increases(v)
+    _dummy_getter = _qick_getter
+    _dummy_setter = _qick_setter
 
 
 @dataclass
@@ -96,6 +109,8 @@ class DelayIncreaseFactor(CorrectionParameter):
 
     def _qick_getter(self): return self.params.corrections.power_rabi.delay_factor()
     def _qick_setter(self, v): self.params.corrections.power_rabi.delay_factor(v)
+    _dummy_getter = _qick_getter
+    _dummy_setter = _qick_setter
 
 
 @dataclass
@@ -105,6 +120,8 @@ class MaxDelayIncreases(CorrectionParameter):
 
     def _qick_getter(self): return int(self.params.corrections.power_rabi.max_delay_increases())
     def _qick_setter(self, v): self.params.corrections.power_rabi.max_delay_increases(v)
+    _dummy_getter = _qick_getter
+    _dummy_setter = _qick_setter
 
 
 @dataclass
@@ -114,6 +131,8 @@ class GainRangeShrinkFactor(CorrectionParameter):
 
     def _qick_getter(self): return self.params.corrections.power_rabi.gain_shrink_factor()
     def _qick_setter(self, v): self.params.corrections.power_rabi.gain_shrink_factor(v)
+    _dummy_getter = _qick_getter
+    _dummy_setter = _qick_setter
 
 
 @dataclass
@@ -123,6 +142,8 @@ class MaxGainRangeShrinks(CorrectionParameter):
 
     def _qick_getter(self): return int(self.params.corrections.power_rabi.max_gain_shrinks())
     def _qick_setter(self, v): self.params.corrections.power_rabi.max_gain_shrinks(v)
+    _dummy_getter = _qick_getter
+    _dummy_setter = _qick_setter
 
 
 # ---------------------------------------------------------------------------
@@ -258,20 +279,6 @@ class ShrinkGainRangeCorrection(Correction):
         return f"gain range: [{self._last_new_start:.3f}, {self._last_new_end:.3f}]"
 
 
-# ---------------------------------------------------------------------------
-# Synthetic data helper
-# ---------------------------------------------------------------------------
-
-@dataclass
-class SyntheticPowerRabiData:
-    pi_amp: float
-    noise_amp: float
-
-    def generate(self, gains: float) -> np.complex128:
-        signal = (np.cos(2 * np.pi * gains / (2 * self.pi_amp)) + 2) - 1j * (np.cos(2 * np.pi * gains / (2 * self.pi_amp)) + 2)
-        noise = self.noise_amp * (np.random.randn() + 1j * np.random.randn())
-        return signal + noise
-
 
 # ---------------------------------------------------------------------------
 # Operation
@@ -371,14 +378,9 @@ class PowerRabi(ProtocolOperation):
     def _measure_dummy(self):
         logger.info("Starting dummy power rabi measurement")
         gains = np.linspace(self.start_gain(), self.end_gain(), int(self.steps_gain()))
-        generator = SyntheticPowerRabiData(
-            pi_amp = self._SIM_PI_AMP,
-            noise_amp = self._SIM_NOISE_AMP
-        )
-
-        sweep = sweep_parameter("gains", gains, record_as(generator.generate, "signal"))
+        generator = Sine(f= 1 / (2 * self._SIM_PI_AMP), phi = np.pi / 2, noise_std=self._SIM_NOISE_AMP)
+        sweep = sweep_parameter("gains", gains, record_as(lambda gains: np.atleast_1d(generator.generate(np.atleast_1d(gains)) - 1j * generator.generate(np.atleast_1d(gains)))[0], "signal"))
         loc, _ = run_and_save_sweep(sweep, "data", self.name)
-
         logger.info("Dummy measurement complete")
         return loc
 

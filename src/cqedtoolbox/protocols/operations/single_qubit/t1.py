@@ -12,6 +12,7 @@ from labcore.analysis.fitfuncs.generic import ExponentialDecay
 from labcore.measurement.storage import run_and_save_sweep
 from labcore.measurement.sweep import sweep_parameter
 from labcore.measurement.record import record_as
+from labcore.data.datagen import ExponentialDecay as ExponentialDecayDataGen
 from labcore.data.datadict_storage import datadict_from_hdf5
 
 from labcore.protocols.base import (
@@ -44,6 +45,8 @@ class SNRMinThreshold(CorrectionParameter):
 
     def _qick_getter(self): return self.params.corrections.t1.snr_min()
     def _qick_setter(self, v): self.params.corrections.t1.snr_min(v)
+    _dummy_getter = _qick_getter
+    _dummy_setter = _qick_setter
 
 
 @dataclass
@@ -53,6 +56,8 @@ class MaxFitParamError(CorrectionParameter):
 
     def _qick_getter(self): return self.params.corrections.t1.max_fit_param_error()
     def _qick_setter(self, v): self.params.corrections.t1.max_fit_param_error(v)
+    _dummy_getter = _qick_getter
+    _dummy_setter = _qick_setter
 
 
 @dataclass
@@ -62,6 +67,8 @@ class DelayIncreaseFactor(CorrectionParameter):
 
     def _qick_getter(self): return self.params.corrections.t1.delay_factor()
     def _qick_setter(self, v): self.params.corrections.t1.delay_factor(v)
+    _dummy_getter = _qick_getter
+    _dummy_setter = _qick_setter
 
 
 @dataclass
@@ -71,6 +78,8 @@ class MaxDelayIncreases(CorrectionParameter):
 
     def _qick_getter(self): return int(self.params.corrections.t1.max_delay_increases())
     def _qick_setter(self, v): self.params.corrections.t1.max_delay_increases(v)
+    _dummy_getter = _qick_getter
+    _dummy_setter = _qick_setter
 
 
 @dataclass
@@ -80,6 +89,8 @@ class AveragingIncreaseFactor(CorrectionParameter):
 
     def _qick_getter(self): return self.params.corrections.t1.averaging_factor()
     def _qick_setter(self, v): self.params.corrections.t1.averaging_factor(v)
+    _dummy_getter = _qick_getter
+    _dummy_setter = _qick_setter
 
 
 @dataclass
@@ -89,6 +100,8 @@ class MaxAveragingIncreases(CorrectionParameter):
 
     def _qick_getter(self): return int(self.params.corrections.t1.max_averaging_increases())
     def _qick_setter(self, v): self.params.corrections.t1.max_averaging_increases(v)
+    _dummy_getter = _qick_getter
+    _dummy_setter = _qick_setter
 
 
 # ---------------------------------------------------------------------------
@@ -235,9 +248,8 @@ class T1Operation(ProtocolOperation):
     def _measure_dummy(self) -> Path:
         logger.info("Starting dummy T1 measurement")
         delays = np.linspace(0, 5 * self._SIM_T1, int(self.steps()))
-        signal_gen = lambda delays: (self._SIM_AMP * np.exp(-delays / self._SIM_T1)
-                  + self._SIM_NOISE_AMP * (np.random.randn() + 1j * np.random.randn()))
-        sweep = sweep_parameter("delays", delays, record_as(signal_gen, "signal"))
+        generator = ExponentialDecayDataGen(A=self._SIM_AMP, tau=self._SIM_T1, of=0, noise_std=self._SIM_NOISE_AMP, imaginary=True)
+        sweep = sweep_parameter("delays", delays, record_as(lambda delays: np.atleast_1d(generator.generate(np.atleast_1d(delays)))[0], "signal"))
         loc, _ = run_and_save_sweep(sweep, "data", self.name)
         logger.info("Dummy measurement complete")
         return loc

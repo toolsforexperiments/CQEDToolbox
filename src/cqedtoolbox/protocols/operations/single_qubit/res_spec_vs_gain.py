@@ -11,6 +11,7 @@ plt.switch_backend("agg")
 from labcore.analysis import DatasetAnalysis
 from labcore.measurement.storage import run_and_save_sweep
 from labcore.data.datadict_storage import datadict_from_hdf5
+from cqedtoolbox.protocols.operations.single_qubit.res_spec import HangerResonator
 from labcore.measurement import sweep_parameter
 from labcore.measurement.record import recording, dep, indep
 
@@ -23,7 +24,7 @@ from cqedtoolbox.protocols.parameters import (
     ReadoutGain,
     ReadoutLength, StartReadoutGain, EndReadoutGain, ResonatorSpecSteps, ResonatorSpecVsGainSteps,
 )
-from cqedtoolbox.protocols.operations.single_qubit.res_spec import ResonatorSpectroscopy, SyntheticHangerResonatorData
+from cqedtoolbox.protocols.operations.single_qubit.res_spec import ResonatorSpectroscopy as _RS
 from cqedtoolbox.measurement_lib.qick.single_transmon_v2 import FreqGainSweepProgram
 
 
@@ -41,6 +42,9 @@ class ResSpecVsGainSNRThreshold(CorrectionParameter):
     def _qick_setter(self, v):
         self.params.corrections.res_spec_vs_gain.snr(v)
 
+    _dummy_getter = _qick_getter
+    _dummy_setter = _qick_setter
+
 
 @dataclass
 class ResSpecVsGainMaxFitParamError(CorrectionParameter):
@@ -52,6 +56,9 @@ class ResSpecVsGainMaxFitParamError(CorrectionParameter):
 
     def _qick_setter(self, v):
         self.params.corrections.res_spec_vs_gain.max_fit_param_error(v)
+
+    _dummy_getter = _qick_getter
+    _dummy_setter = _qick_setter
 
 
 @dataclass
@@ -65,6 +72,9 @@ class ResSpecVsGainHighSNRThreshold(CorrectionParameter):
     def _qick_setter(self, v):
         self.params.corrections.res_spec_vs_gain.high_snr(v)
 
+    _dummy_getter = _qick_getter
+    _dummy_setter = _qick_setter
+
 
 @dataclass
 class ResSpecVsGainRepetitionFactor(CorrectionParameter):
@@ -77,6 +87,9 @@ class ResSpecVsGainRepetitionFactor(CorrectionParameter):
     def _qick_setter(self, v):
         self.params.corrections.res_spec_vs_gain.rep_factor(v)
 
+    _dummy_getter = _qick_getter
+    _dummy_setter = _qick_setter
+
 
 @dataclass
 class ResSpecVsGainMaxRepetitionIncreases(CorrectionParameter):
@@ -88,6 +101,9 @@ class ResSpecVsGainMaxRepetitionIncreases(CorrectionParameter):
 
     def _qick_setter(self, v):
         self.params.corrections.res_spec_vs_gain.max_rep_increases(v)
+
+    _dummy_getter = _qick_getter
+    _dummy_setter = _qick_setter
 
 
 class IncreaseRepetitionsCorrection(Correction):
@@ -193,7 +209,8 @@ class ResonatorSpectroscopyVsGain(ProtocolOperation):
 
     def _measure_dummy(self) -> Path:
 
-        freq_shift_per_gain_unit = -.5e6  # MHz per gain unit
+        freq_shift_per_gain_unit = -5e6  # Hz per gain unit
+        f0_center = (self.start_frequency() + self.end_frequency()) / 2
 
         @recording(
             indep("gains"),
@@ -203,16 +220,9 @@ class ResonatorSpectroscopyVsGain(ProtocolOperation):
             gains = np.linspace(self.start_gain(), self.end_gain(), self._SIM_N_GAIN_STEPS)
             ret_signal = []
             for i in range(self._SIM_N_GAIN_STEPS):
-                shifted_center = ResonatorSpectroscopy._SIM_F0 + freq_shift_per_gain_unit * i
-                generator = SyntheticHangerResonatorData(
-                    f0=shifted_center,
-                    Qi=ResonatorSpectroscopy._SIM_QI,
-                    Qc=ResonatorSpectroscopy._SIM_QC,
-                    A=ResonatorSpectroscopy._SIM_A,
-                    phi=ResonatorSpectroscopy._SIM_PHI,
-                    noise_amp=ResonatorSpectroscopy._SIM_NOISE_AMP
-                )
-                ret_signal.append(generator.generate(frequencies))
+                shifted_center = f0_center + freq_shift_per_gain_unit * i
+                generator = HangerResonator(f0=shifted_center, Qc=_RS._SIM_QC, Qi=_RS._SIM_QI, A=_RS._SIM_A, phi=_RS._SIM_PHI, noise_std=_RS._SIM_NOISE_AMP)
+                ret_signal.append(np.atleast_1d(generator.generate(np.atleast_1d(frequencies)))[0])
 
             return gains, ret_signal
 
@@ -304,7 +314,7 @@ class ResonatorSpectroscopyVsGain(ProtocolOperation):
                 folder_name = f"resonator_spec_vs_gain_i={i}_g={g}"
 
                 # Use the static method from ResonatorSpectroscopy
-                ret = ResonatorSpectroscopy.add_mag_and_unwind_and_fit(
+                ret = _RS.add_mag_and_unwind_and_fit(
                     freqs, trace_signal, f"Gain = {g}"
                 )
 
@@ -318,7 +328,7 @@ class ResonatorSpectroscopyVsGain(ProtocolOperation):
                         f"Trace {i} (gain={g}): stderr is None for params "
                         f"{_null_stderr_params} — re-fitting"
                     )
-                    ret = ResonatorSpectroscopy.add_mag_and_unwind_and_fit(
+                    ret = _RS.add_mag_and_unwind_and_fit(
                         freqs, trace_signal, f"Gain = {g}"
                     )
 

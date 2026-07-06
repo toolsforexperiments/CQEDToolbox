@@ -12,6 +12,7 @@ from labcore.analysis.fitfuncs.generic import ExponentiallyDecayingSine
 from labcore.measurement.storage import run_and_save_sweep
 from labcore.measurement.sweep import sweep_parameter
 from labcore.measurement.record import record_as
+from labcore.data.datagen import ExponentialDecayingSine
 from labcore.data.datadict_storage import datadict_from_hdf5
 
 from labcore.protocols.base import (
@@ -44,6 +45,8 @@ class SNRMinThreshold(CorrectionParameter):
 
     def _qick_getter(self): return self.params.corrections.t2r.snr_min()
     def _qick_setter(self, v): self.params.corrections.t2r.snr_min(v)
+    _dummy_getter = _qick_getter
+    _dummy_setter = _qick_setter
 
 
 @dataclass
@@ -53,6 +56,8 @@ class MaxFitParamError(CorrectionParameter):
 
     def _qick_getter(self): return self.params.corrections.t2r.max_fit_param_error()
     def _qick_setter(self, v): self.params.corrections.t2r.max_fit_param_error(v)
+    _dummy_getter = _qick_getter
+    _dummy_setter = _qick_setter
 
 
 @dataclass
@@ -62,6 +67,8 @@ class AveragingIncreaseFactor(CorrectionParameter):
 
     def _qick_getter(self): return self.params.corrections.t2r.averaging_factor()
     def _qick_setter(self, v): self.params.corrections.t2r.averaging_factor(v)
+    _dummy_getter = _qick_getter
+    _dummy_setter = _qick_setter
 
 
 @dataclass
@@ -71,6 +78,8 @@ class MaxAveragingIncreases(CorrectionParameter):
 
     def _qick_getter(self): return int(self.params.corrections.t2r.max_averaging_increases())
     def _qick_setter(self, v): self.params.corrections.t2r.max_averaging_increases(v)
+    _dummy_getter = _qick_getter
+    _dummy_setter = _qick_setter
 
 
 # ---------------------------------------------------------------------------
@@ -169,10 +178,15 @@ class T2ROperation(ProtocolOperation):
 
     def _measure_dummy(self) -> Path:
         logger.info("Starting dummy T2 Ramsey measurement")
-        delays = np.linspace(0, 5 * self._SIM_T2R, int(self.steps()))
-        signal_gen = lambda delays: (self._SIM_AMP * np.exp(-delays / self._SIM_T2R) * np.exp(2j * np.pi * self._SIM_DETUNING * delays)
-                  + self._SIM_NOISE_AMP * (np.random.randn() + 1j * np.random.randn()))
-        sweep = sweep_parameter("delays", delays, record_as(signal_gen, "signal"))
+        delays = np.linspace(0.5, 5 * self._SIM_T2R, int(self.steps()))
+        generator = ExponentialDecayingSine(A=self._SIM_AMP, f=self._SIM_DETUNING, phi=0, tau=self._SIM_T2R, of=0, noise_std=self._SIM_NOISE_AMP)
+        sweep = sweep_parameter("delays", delays, record_as(
+            lambda delays: (
+                np.atleast_1d(generator.generate(np.atleast_1d(delays), phi=np.pi / 2))[0]
+                + 1j * np.atleast_1d(generator.generate(np.atleast_1d(delays)))[0]
+            ),
+            "signal"
+        ))
         loc, _ = run_and_save_sweep(sweep, "data", self.name)
         logger.info("Dummy measurement complete")
         return loc

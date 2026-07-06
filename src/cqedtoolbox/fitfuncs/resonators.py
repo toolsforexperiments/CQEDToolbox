@@ -157,7 +157,6 @@ class HangerResponseBruno(Fit):
             transmission_slope = guess_transmission_slope,
         )
 
-
         # return dict(
         #     A = 1,
         #     f_0 = 1,
