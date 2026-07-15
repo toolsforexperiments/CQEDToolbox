@@ -10,6 +10,42 @@ from labcore.protocols.base import ProtocolParameterBase
 from instrumentserver.helpers import nestedAttributeFromString
 
 
+def _active_qubit(params):
+    return nestedAttributeFromString(params, "active.qubit")()
+
+
+def _qpath(params, path):
+    """Get/set handle for a parameter-manager entry addressed by string path."""
+    return nestedAttributeFromString(params, path)
+
+
+def _readout_pulse(params):
+    """Name of the readout pulse in use on the OPX (e.g. 'sling')."""
+    return nestedAttributeFromString(params, "opx.readout_pulse")()
+
+
+def _opx_readout_window(params):
+    """(start, end) of the OPX readout frequency sweep window, absolute Hz.
+
+    The window is not stored directly: center = readout LO + IF, and the span
+    is scripts.qubit_tuneup.resonator_spec_range in units of the readout bandwidth.
+    """
+    q = _active_qubit(params)
+    center = _qpath(params, f"{q}.readout.LO")() + _qpath(params, f"{q}.readout.IF")()
+    span = (_qpath(params, "scripts.qubit_tuneup.resonator_spec_range")()
+            * _qpath(params, f"{q}.readout.bandwidth")())
+    return center - span / 2, center + span / 2
+
+
+def _opx_set_readout_window(params, start, end):
+    """Write a readout window (absolute Hz) back as center (readout IF) + span (range in BW units)."""
+    q = _active_qubit(params)
+    lo = _qpath(params, f"{q}.readout.LO")()
+    bw = _qpath(params, f"{q}.readout.bandwidth")()
+    _qpath(params, f"{q}.readout.IF")((start + end) / 2 - lo)
+    _qpath(params, "scripts.qubit_tuneup.resonator_spec_range")((end - start) / bw)
+
+
 @dataclass
 class Repetition(ProtocolParameterBase):
     name: str = field(default="reps", init=False)
@@ -26,6 +62,12 @@ class Repetition(ProtocolParameterBase):
 
     def _qick_setter(self, value):
         return self.params.qick.default_reps(value)
+
+    def _opx_getter(self):
+        return int(self.params.opx.default_reps())
+
+    def _opx_setter(self, value):
+        return self.params.opx.default_reps(int(value))
 
 
 @dataclass
@@ -49,6 +91,12 @@ class ResonatorSpecSteps(ProtocolParameterBase):
         active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
         return nestedAttributeFromString(self.params, f"{active_qubit}.scripts.res_spec.steps")(value)
 
+    def _opx_getter(self):
+        return int(_qpath(self.params, "scripts.qubit_tuneup.resonator_spec_points")())
+
+    def _opx_setter(self, value):
+        return _qpath(self.params, "scripts.qubit_tuneup.resonator_spec_points")(int(value))
+
 
 @dataclass
 class ReadoutFrequency(ProtocolParameterBase):
@@ -69,6 +117,16 @@ class ReadoutFrequency(ProtocolParameterBase):
         active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
         return nestedAttributeFromString(self.params, f"{active_qubit}.readout.freq")(value)
 
+    def _opx_getter(self):
+        q = _active_qubit(self.params)
+        return (_qpath(self.params, f"{q}.readout.LO")()
+                + _qpath(self.params, f"{q}.readout.IF")())
+
+    def _opx_setter(self, value):
+        q = _active_qubit(self.params)
+        lo = _qpath(self.params, f"{q}.readout.LO")()
+        return _qpath(self.params, f"{q}.readout.IF")(value - lo)
+
 @dataclass
 class ReadoutLength(ProtocolParameterBase):
     name: str = field(default="readout_length", init=False)
@@ -87,6 +145,16 @@ class ReadoutLength(ProtocolParameterBase):
     def _qick_setter(self, value):
         active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
         return nestedAttributeFromString(self.params, f"{active_qubit}.readout.len")(value)
+
+    def _opx_getter(self):
+        q = _active_qubit(self.params)
+        rp = _readout_pulse(self.params)
+        return _qpath(self.params, f"{q}.readout.{rp}.len")()
+
+    def _opx_setter(self, value):
+        q = _active_qubit(self.params)
+        rp = _readout_pulse(self.params)
+        return _qpath(self.params, f"{q}.readout.{rp}.len")(value)
 
 
 @dataclass
@@ -107,6 +175,16 @@ class ReadoutGain(ProtocolParameterBase):
     def _qick_setter(self, value):
         active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
         return nestedAttributeFromString(self.params, f"{active_qubit}.readout.gain")(value)
+
+    def _opx_getter(self):
+        q = _active_qubit(self.params)
+        rp = _readout_pulse(self.params)
+        return _qpath(self.params, f"{q}.readout.{rp}.amp")()
+
+    def _opx_setter(self, value):
+        q = _active_qubit(self.params)
+        rp = _readout_pulse(self.params)
+        return _qpath(self.params, f"{q}.readout.{rp}.amp")(value)
 
 @dataclass
 class StartReadoutFrequency(ProtocolParameterBase):
@@ -129,6 +207,13 @@ class StartReadoutFrequency(ProtocolParameterBase):
         active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
         return nestedAttributeFromString(self.params, f"{active_qubit}.scripts.res_spec.start_f")(value)
 
+    def _opx_getter(self):
+        return _opx_readout_window(self.params)[0]
+
+    def _opx_setter(self, value):
+        _, end = _opx_readout_window(self.params)
+        _opx_set_readout_window(self.params, value, end)
+
 @dataclass
 class EndReadoutFrequency(ProtocolParameterBase):
     name: str = field(default="final_readout_frequency", init=False)
@@ -149,6 +234,13 @@ class EndReadoutFrequency(ProtocolParameterBase):
     def _qick_setter(self, value):
         active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
         return nestedAttributeFromString(self.params, f"{active_qubit}.scripts.res_spec.end_f")(value)
+
+    def _opx_getter(self):
+        return _opx_readout_window(self.params)[1]
+
+    def _opx_setter(self, value):
+        start, _ = _opx_readout_window(self.params)
+        _opx_set_readout_window(self.params, start, value)
 
 
 @dataclass

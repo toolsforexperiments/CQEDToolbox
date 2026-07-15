@@ -63,6 +63,10 @@ class SNRThreshold(CorrectionParameter):
     def _qick_setter(self, value):
         self.params.corrections.res_spec.snr(value)
 
+    # corrections.* paths are platform-agnostic
+    _opx_getter = _qick_getter
+    _opx_setter = _qick_setter
+
 
 @dataclass
 class MaxWindowShifts(CorrectionParameter):
@@ -74,6 +78,9 @@ class MaxWindowShifts(CorrectionParameter):
 
     def _qick_setter(self, value):
         self.params.corrections.res_spec.max_window_shifts(value)
+
+    _opx_getter = _qick_getter
+    _opx_setter = _qick_setter
 
 
 @dataclass
@@ -87,6 +94,9 @@ class SamplingIncreaseFactor(CorrectionParameter):
     def _qick_setter(self, value):
         self.params.corrections.res_spec.sampling_factor(value)
 
+    _opx_getter = _qick_getter
+    _opx_setter = _qick_setter
+
 
 @dataclass
 class MaxSamplingIncreases(CorrectionParameter):
@@ -98,6 +108,9 @@ class MaxSamplingIncreases(CorrectionParameter):
 
     def _qick_setter(self, value):
         self.params.corrections.res_spec.max_sampling_increases(value)
+
+    _opx_getter = _qick_getter
+    _opx_setter = _qick_setter
 
 
 @dataclass
@@ -111,6 +124,9 @@ class AveragingIncreaseFactor(CorrectionParameter):
     def _qick_setter(self, value):
         self.params.corrections.res_spec.averaging_factor(value)
 
+    _opx_getter = _qick_getter
+    _opx_setter = _qick_setter
+
 
 @dataclass
 class MaxAveragingIncreases(CorrectionParameter):
@@ -123,6 +139,9 @@ class MaxAveragingIncreases(CorrectionParameter):
     def _qick_setter(self, value):
         self.params.corrections.res_spec.max_averaging_increases(value)
 
+    _opx_getter = _qick_getter
+    _opx_setter = _qick_setter
+
 
 @dataclass
 class MaxFitParamError(CorrectionParameter):
@@ -134,6 +153,9 @@ class MaxFitParamError(CorrectionParameter):
 
     def _qick_setter(self, value):
         self.params.corrections.res_spec.max_fit_param_error(value)
+
+    _opx_getter = _qick_getter
+    _opx_setter = _qick_setter
 
 
 class WindowShiftCorrection(Correction):
