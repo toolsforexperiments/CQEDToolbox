@@ -70,11 +70,6 @@ class SNRThreshold(CorrectionParameter):
     def _opx_setter(self, value):
         self.params.corrections.res_spec.snr(value)
 
-    # corrections.* paths are platform-agnostic
-    _opx_getter = _qick_getter
-    _opx_setter = _qick_setter
-
-
 @dataclass
 class MaxWindowShifts(CorrectionParameter):
     name: str = field(default="res_spec_max_window_shifts", init=False)
@@ -91,10 +86,6 @@ class MaxWindowShifts(CorrectionParameter):
 
     def _opx_setter(self, value):
         self.params.corrections.res_spec.max_window_shifts(value)
-
-    _opx_getter = _qick_getter
-    _opx_setter = _qick_setter
-
 
 @dataclass
 class SamplingIncreaseFactor(CorrectionParameter):
@@ -113,10 +104,6 @@ class SamplingIncreaseFactor(CorrectionParameter):
     def _opx_setter(self, value):
         self.params.corrections.res_spec.sampling_factor(value)
 
-    _opx_getter = _qick_getter
-    _opx_setter = _qick_setter
-
-
 @dataclass
 class MaxSamplingIncreases(CorrectionParameter):
     name: str = field(default="res_spec_max_sampling_increases", init=False)
@@ -133,10 +120,6 @@ class MaxSamplingIncreases(CorrectionParameter):
 
     def _opx_setter(self, value):
         self.params.corrections.res_spec.max_sampling_increases(value)
-
-    _opx_getter = _qick_getter
-    _opx_setter = _qick_setter
-
 
 @dataclass
 class AveragingIncreaseFactor(CorrectionParameter):
@@ -155,10 +138,6 @@ class AveragingIncreaseFactor(CorrectionParameter):
     def _opx_setter(self, value):
         self.params.corrections.res_spec.averaging_factor(value)
 
-    _opx_getter = _qick_getter
-    _opx_setter = _qick_setter
-
-
 @dataclass
 class MaxAveragingIncreases(CorrectionParameter):
     name: str = field(default="res_spec_max_averaging_increases", init=False)
@@ -176,10 +155,6 @@ class MaxAveragingIncreases(CorrectionParameter):
     def _opx_setter(self, value):
         self.params.corrections.res_spec.max_averaging_increases(value)
 
-    _opx_getter = _qick_getter
-    _opx_setter = _qick_setter
-
-
 @dataclass
 class MaxFitParamError(CorrectionParameter):
     name: str = field(default="res_spec_max_fit_param_error", init=False)
@@ -196,10 +171,6 @@ class MaxFitParamError(CorrectionParameter):
 
     def _opx_setter(self, value):
         self.params.corrections.res_spec.max_fit_param_error(value)
-
-    _opx_getter = _qick_getter
-    _opx_setter = _qick_setter
-
 
 class WindowShiftCorrection(Correction):
     name = "window_shift"

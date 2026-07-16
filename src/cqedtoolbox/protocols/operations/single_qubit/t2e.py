@@ -198,10 +198,6 @@ class T2EOperation(ProtocolOperation):
             max_averaging_increases=MaxAveragingIncreases(params),
         )
 
-        self._increase_echos = IncreaseEchosCorrection(
-            self.n_echos,
-            self.max_echos,
-        )
         self._increase_averaging = IncreaseAveragingCorrection(
             self.repetitions,
             self._increase_echos,
@@ -209,7 +205,7 @@ class T2EOperation(ProtocolOperation):
             self.max_averaging_increases,
         )
 
-        corrections = [self._increase_averaging] if self.platform_type == PlatformTypes.OPX else [self._increase_echos, self._increase_averaging]
+        corrections = [self._increase_averaging]
         self._register_check("quality_check", self._check_quality, corrections)
 
         self._register_success_update(self.t2e, lambda: self._winner_fit.params["tau"].value)

@@ -1,3 +1,10 @@
+"""
+TODO LIST:
+
+* Detuning word is now being used for both the artificial detuning and chi
+* ROCalibration should store the centers of both g and e states in the parameter manager and have ProtocolParameters for them.
+
+"""
 from dataclasses import dataclass, field
 from labcore.protocols.base import ProtocolParameterBase
 from instrumentserver.helpers import nestedAttributeFromString
