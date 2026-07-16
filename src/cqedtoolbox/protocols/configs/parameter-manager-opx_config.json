@@ -1,0 +1,446 @@
+{
+  "parameter_manager.active.ancilla_qubit": {
+    "unit": "",
+    "value": "q01"
+  },
+  "parameter_manager.active.data_qubit": {
+    "unit": "",
+    "value": "q01"
+  },
+  "parameter_manager.active.qubit": {
+    "unit": "",
+    "value": "q01"
+  },
+  "parameter_manager.opx.const_pulse.amp": {
+    "unit": "",
+    "value": 0.1
+  },
+  "parameter_manager.opx.default_batch": {
+    "unit": "",
+    "value": 20
+  },
+  "parameter_manager.opx.default_rep_delay": {
+    "unit": "ns",
+    "value": 20000
+  },
+  "parameter_manager.opx.default_reps": {
+    "unit": "",
+    "value": 250
+  },
+  "parameter_manager.opx.readout_pulse": {
+    "unit": "",
+    "value": "short"
+  },
+  "parameter_manager.opx.readout_weights": {
+    "unit": "",
+    "value": null
+  },
+  "parameter_manager.q01.IF": {
+    "unit": "Hz",
+    "value": 124085680.0
+  },
+  "parameter_manager.q01.LO": {
+    "unit": "Hz",
+    "value": 5800000000.0
+  },
+  "parameter_manager.q01.T1": {
+    "unit": "ns",
+    "value": 72000.0
+  },
+  "parameter_manager.q01.T2E": {
+    "unit": "ns",
+    "value": 39000.0
+  },
+  "parameter_manager.q01.T2R": {
+    "unit": "ns",
+    "value": 9000.0
+  },
+  "parameter_manager.q01.alpha": {
+    "unit": "Hz",
+    "value": 181800000.0
+  },
+  "parameter_manager.q01.octave_gain": {
+    "unit": "dB",
+    "value": 10
+  },
+  "parameter_manager.q01.pulses.long.amp": {
+    "unit": "",
+    "value": 0.075
+  },
+  "parameter_manager.q01.pulses.long.length": {
+    "unit": "ns",
+    "value": 50000
+  },
+  "parameter_manager.q01.pulses.pi.amp": {
+    "unit": "",
+    "value": 0.00768
+  },
+  "parameter_manager.q01.pulses.pi.amp_pibytwo": {
+    "unit": "",
+    "value": 0.12409985
+  },
+  "parameter_manager.q01.pulses.pi.drag_multiplier": {
+    "unit": "",
+    "value": -0.3647
+  },
+  "parameter_manager.q01.pulses.pi.len": {
+    "unit": "",
+    "value": 1200
+  },
+  "parameter_manager.q01.readout.IF": {
+    "unit": "Hz",
+    "value": 100000000.0
+  },
+  "parameter_manager.q01.readout.LO": {
+    "unit": "Hz",
+    "value": 7543600000.0
+  },
+  "parameter_manager.q01.readout.bandwidth": {
+    "unit": "Hz",
+    "value": 250000.0
+  },
+  "parameter_manager.q01.readout.long.amp": {
+    "unit": "",
+    "value": 0.01
+  },
+  "parameter_manager.q01.readout.long.len": {
+    "unit": "ns",
+    "value": 5000
+  },
+  "parameter_manager.q01.readout.octave_gain": {
+    "unit": "dB",
+    "value": -10
+  },
+  "parameter_manager.q01.readout.short.amp": {
+    "unit": "",
+    "value": 0.01
+  },
+  "parameter_manager.q01.readout.short.buffer": {
+    "unit": "ns",
+    "value": 0
+  },
+  "parameter_manager.q01.readout.short.len": {
+    "unit": "ns",
+    "value": 2000
+  },
+  "parameter_manager.q01.readout.short.wait": {
+    "unit": "ns",
+    "value": 0
+  },
+  "parameter_manager.scripts.qubit_tuneup.conditional_pi_spec_offset": {
+    "unit": "Hz",
+    "value": -3000000.0
+  },
+  "parameter_manager.scripts.qubit_tuneup.conditional_pi_spec_pulse_shape": {
+    "unit": "",
+    "value": "gaussian"
+  },
+  "parameter_manager.scripts.qubit_tuneup.oscillations_per_t2e": {
+    "unit": "",
+    "value": 3
+  },
+  "parameter_manager.scripts.qubit_tuneup.oscillations_per_t2r": {
+    "unit": "",
+    "value": 3
+  },
+  "parameter_manager.scripts.qubit_tuneup.pispec_pulselen": {
+    "unit": "ns",
+    "value": 2400
+  },
+  "parameter_manager.scripts.qubit_tuneup.pts_per_pispec": {
+    "unit": "",
+    "value": 8
+  },
+  "parameter_manager.scripts.qubit_tuneup.pts_per_t1": {
+    "unit": "",
+    "value": 20
+  },
+  "parameter_manager.scripts.qubit_tuneup.qubit_spec_range": {
+    "unit": "Hz",
+    "value": 16000000.0
+  },
+  "parameter_manager.scripts.qubit_tuneup.rabi_range": {
+    "unit": "",
+    "value": 1.5
+  },
+  "parameter_manager.scripts.qubit_tuneup.rabi_step": {
+    "unit": "",
+    "value": 0.03
+  },
+  "parameter_manager.scripts.qubit_tuneup.resonator_spec_range": {
+    "unit": "BW",
+    "value": 20
+  },
+  "parameter_manager.scripts.qubit_tuneup.resonator_spec_vs_amp_a0": {
+    "unit": "",
+    "value": 0.001
+  },
+  "parameter_manager.scripts.qubit_tuneup.resonator_spec_vs_amp_a1": {
+    "unit": "",
+    "value": 0.03
+  },
+  "parameter_manager.scripts.qubit_tuneup.resonator_spec_vs_amp_na": {
+    "unit": "",
+    "value": 16
+  },
+  "parameter_manager.scripts.qubit_tuneup.saturation_spec_range": {
+    "unit": "Hz",
+    "value": 220000000.0
+  },
+  "parameter_manager.scripts.qubit_tuneup.saturation_spec_step": {
+    "unit": "Hz",
+    "value": 50000.0
+  },
+  "parameter_manager.scripts.qubit_tuneup.t2_nppp": {
+    "unit": "",
+    "value": 8
+  },
+  "parameter_manager.scripts.qubit_tuneup.time_rabi_nperiods": {
+    "unit": "",
+    "value": 3
+  },
+  "parameter_manager.scripts.qubit_tuneup.time_rabi_nppp": {
+    "unit": "",
+    "value": 8
+  },
+  "parameter_manager.scripts.qubit_tuneup.time_rabi_points": {
+    "unit": "",
+    "value": 83
+  },
+  "parameter_manager.scripts.qubit_tuneup.time_rabi_ssb_points": {
+    "unit": "",
+    "value": 5
+  },
+  "parameter_manager.scripts.qubit_tuneup.time_rabi_ssb_range": {
+    "unit": "Hz",
+    "value": 400000.0
+  },
+  "parameter_manager.scripts.qubit_tuneup.time_rabi_stop": {
+    "unit": "ns",
+    "value": 1000
+  },
+  "parameter_manager.corrections.res_spec.snr": {
+    "unit": "",
+    "value": 2.0
+  },
+  "parameter_manager.corrections.res_spec.max_window_shifts": {
+    "unit": "",
+    "value": 3
+  },
+  "parameter_manager.corrections.res_spec.sampling_factor": {
+    "unit": "",
+    "value": 2.0
+  },
+  "parameter_manager.corrections.res_spec.max_sampling_increases": {
+    "unit": "",
+    "value": 2
+  },
+  "parameter_manager.corrections.res_spec.averaging_factor": {
+    "unit": "",
+    "value": 2.0
+  },
+  "parameter_manager.corrections.res_spec.max_averaging_increases": {
+    "unit": "",
+    "value": 2
+  },
+  "parameter_manager.corrections.res_spec.max_fit_param_error": {
+    "unit": "",
+    "value": 0.5
+  },
+  "parameter_manager.corrections.res_spec_after_pi.snr": {
+    "unit": "",
+    "value": 2.0
+  },
+  "parameter_manager.corrections.res_spec_after_pi.max_fit_param_error": {
+    "unit": "",
+    "value": 0.75
+  },
+  "parameter_manager.corrections.res_spec_after_pi.detuning_threshold": {
+    "unit": "Hz",
+    "value": 100000.0
+  },
+  "parameter_manager.corrections.res_spec_vs_gain.snr": {
+    "unit": "",
+    "value": 2.0
+  },
+  "parameter_manager.corrections.res_spec_vs_gain.max_fit_param_error": {
+    "unit": "",
+    "value": 0.75
+  },
+  "parameter_manager.corrections.res_spec_vs_gain.high_snr": {
+    "unit": "",
+    "value": 2.0
+  },
+  "parameter_manager.corrections.res_spec_vs_gain.rep_factor": {
+    "unit": "",
+    "value": 2.0
+  },
+  "parameter_manager.corrections.res_spec_vs_gain.max_rep_increases": {
+    "unit": "",
+    "value": 2
+  },
+  "parameter_manager.corrections.sat_spec.snr": {
+    "unit": "",
+    "value": 2.0
+  },
+  "parameter_manager.corrections.sat_spec.max_fit_param_error": {
+    "unit": "",
+    "value": 0.75
+  },
+  "parameter_manager.corrections.sat_spec.max_window_shifts": {
+    "unit": "",
+    "value": 3
+  },
+  "parameter_manager.corrections.sat_spec.averaging_factor": {
+    "unit": "",
+    "value": 2.0
+  },
+  "parameter_manager.corrections.sat_spec.max_averaging_increases": {
+    "unit": "",
+    "value": 2
+  },
+  "parameter_manager.corrections.sat_spec.sampling_factor": {
+    "unit": "",
+    "value": 2.0
+  },
+  "parameter_manager.corrections.sat_spec.max_sampling_increases": {
+    "unit": "",
+    "value": 2
+  },
+  "parameter_manager.corrections.sat_spec.max_power_increases": {
+    "unit": "",
+    "value": 2
+  },
+  "parameter_manager.corrections.sat_spec.power_increase_factor": {
+    "unit": "",
+    "value": 1.5
+  },
+  "parameter_manager.corrections.sat_spec.single_peak_snr": {
+    "unit": "",
+    "value": 2.0
+  },
+  "parameter_manager.corrections.sat_spec.single_peak_max_reductions": {
+    "unit": "",
+    "value": 2
+  },
+  "parameter_manager.corrections.sat_spec.power_reduction_factor": {
+    "unit": "",
+    "value": 1.5
+  },
+  "parameter_manager.corrections.power_rabi.snr": {
+    "unit": "",
+    "value": 2.0
+  },
+  "parameter_manager.corrections.power_rabi.max_fit_param_error": {
+    "unit": "",
+    "value": 0.5
+  },
+  "parameter_manager.corrections.power_rabi.averaging_factor": {
+    "unit": "",
+    "value": 2.0
+  },
+  "parameter_manager.corrections.power_rabi.max_averaging_increases": {
+    "unit": "",
+    "value": 2
+  },
+  "parameter_manager.corrections.power_rabi.sampling_factor": {
+    "unit": "",
+    "value": 2.0
+  },
+  "parameter_manager.corrections.power_rabi.max_sampling_increases": {
+    "unit": "",
+    "value": 2
+  },
+  "parameter_manager.corrections.power_rabi.delay_factor": {
+    "unit": "",
+    "value": 2.0
+  },
+  "parameter_manager.corrections.power_rabi.max_delay_increases": {
+    "unit": "",
+    "value": 2
+  },
+  "parameter_manager.corrections.power_rabi.gain_shrink_factor": {
+    "unit": "",
+    "value": 1.5
+  },
+  "parameter_manager.corrections.power_rabi.max_gain_shrinks": {
+    "unit": "",
+    "value": 2
+  },
+  "parameter_manager.corrections.pi_spec.snr": {
+    "unit": "",
+    "value": 2.0
+  },
+  "parameter_manager.corrections.pi_spec.max_fit_param_error": {
+    "unit": "",
+    "value": 0.75
+  },
+  "parameter_manager.corrections.pi_spec.averaging_factor": {
+    "unit": "",
+    "value": 2.0
+  },
+  "parameter_manager.corrections.pi_spec.max_averaging_increases": {
+    "unit": "",
+    "value": 2
+  },
+  "parameter_manager.corrections.t1.snr_min": {
+    "unit": "",
+    "value": 2.0
+  },
+  "parameter_manager.corrections.t1.max_fit_param_error": {
+    "unit": "",
+    "value": 0.75
+  },
+  "parameter_manager.corrections.t1.delay_factor": {
+    "unit": "",
+    "value": 1.5
+  },
+  "parameter_manager.corrections.t1.max_delay_increases": {
+    "unit": "",
+    "value": 2
+  },
+  "parameter_manager.corrections.t1.averaging_factor": {
+    "unit": "",
+    "value": 2.0
+  },
+  "parameter_manager.corrections.t1.max_averaging_increases": {
+    "unit": "",
+    "value": 2
+  },
+  "parameter_manager.corrections.t2r.snr_min": {
+    "unit": "",
+    "value": 2.0
+  },
+  "parameter_manager.corrections.t2r.max_fit_param_error": {
+    "unit": "",
+    "value": 0.75
+  },
+  "parameter_manager.corrections.t2r.averaging_factor": {
+    "unit": "",
+    "value": 2.0
+  },
+  "parameter_manager.corrections.t2r.max_averaging_increases": {
+    "unit": "",
+    "value": 2
+  },
+  "parameter_manager.corrections.t2e.snr_min": {
+    "unit": "",
+    "value": 2.0
+  },
+  "parameter_manager.corrections.t2e.max_fit_param_error": {
+    "unit": "",
+    "value": 0.75
+  },
+  "parameter_manager.corrections.t2e.max_echos": {
+    "unit": "",
+    "value": 3
+  },
+  "parameter_manager.corrections.t2e.averaging_factor": {
+    "unit": "",
+    "value": 2.0
+  },
+  "parameter_manager.corrections.t2e.max_averaging_increases": {
+    "unit": "",
+    "value": 2
+  }
+}

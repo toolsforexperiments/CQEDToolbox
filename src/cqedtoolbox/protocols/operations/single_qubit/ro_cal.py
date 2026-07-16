@@ -10,7 +10,7 @@ from labcore.analysis import DatasetAnalysis
 from labcore.measurement.storage import run_and_save_sweep
 from labcore.measurement.sweep import sweep_parameter
 from labcore.measurement.record import record_as
-from labcore.data.datadict_storage import datadict_from_hdf5
+from labcore.data.datadict_storage import datadict_from_hdf5, load_as_xr
 
 from labcore.protocols.base import ProtocolOperation, OperationStatus, EvaluateResult
 from cqedtoolbox.protocols.parameters import (
@@ -19,7 +19,9 @@ from cqedtoolbox.protocols.parameters import (
     ReadoutGain,
     ReadoutLength
 )
+from cqedtoolbox.measurement_lib.opx.advanced.qubit_tuneup import measure_readout_calibration
 from cqedtoolbox.measurement_lib.qick.single_transmon_v2 import SingleShotGroundProgram, SingleShotExcitedProgram
+from cqedtoolbox.protocols.parameters import nestedAttributeFromString
 
 
 logger = logging.getLogger(__name__)
@@ -138,6 +140,15 @@ class ReadoutCalibration(ProtocolOperation):
                 logger.debug(f"Restoring reps to {self.old_reps}")
                 self.repetitions(self.old_reps)
 
+    def _measure_opx(self) -> Path:
+        logger.info("Starting opx readout calibration measurement")
+        qubit_name = nestedAttributeFromString(self.params, "active.qubit")()
+        loc = measure_readout_calibration(qubit_name=qubit_name, n_reps=int(self.repetitions()))
+        self.data_loc_ground = loc
+        self.data_loc_excited = loc
+        logger.info("Measurement complete")
+        return loc
+
     def _load_data_qick(self):
         # Load ground state data
         path_ground = self.data_loc_ground / "data.ddh5"
@@ -158,6 +169,23 @@ class ReadoutCalibration(ProtocolOperation):
         self.dependents_excited["signal"] = data_excited["e"]["values"]
         self.I_excited = data_excited["e"]["values"].T.real
         self.Q_excited = data_excited["e"]["values"].T.imag
+
+    def _load_data_opx(self):
+        data = load_as_xr(self.data_loc)
+
+        ground = data.sel(setting=2)
+        excited = data.sel(setting=1)
+
+        ground_signal = ground["i"].values + 1j * ground["q"].values
+        excited_signal = excited["i"].values + 1j * excited["q"].values
+
+        self.dependents_ground["signal"] = ground_signal
+        self.I_ground = ground["i"].values
+        self.Q_ground = ground["q"].values
+
+        self.dependents_excited["signal"] = excited_signal
+        self.I_excited = excited["i"].values
+        self.Q_excited = excited["q"].values
 
     def analyze(self):
         # Calculate mean positions
