@@ -1,12 +1,6 @@
 from dataclasses import dataclass, field
 from labcore.protocols.base import ProtocolParameterBase
-
-
-def nestedAttributeFromString(root, path):
-    obj = root
-    for attr in path.split("."):
-        obj = getattr(obj, attr)
-    return obj
+from instrumentserver.helpers import nestedAttributeFromString
 
 
 def _opx_readout_window(params):
