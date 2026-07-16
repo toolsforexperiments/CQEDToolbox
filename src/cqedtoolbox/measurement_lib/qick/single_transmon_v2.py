@@ -338,12 +338,6 @@ class TwoToneSpectroscopy(AveragerProgramV2):
         self.pulse(ch=ro_dac_ch, name="read_pulse", t=0.05)
         self.trigger(ros=[ro_adc_ch], pins=[0], t=cfg['trig_time'])
 
-    
-
-# @QickBoardSweep(
-#     TimeVariable("t", time_variable="wait_time")
-# )
-
 
 @QickBoardSweep(
     PulseVariable("gain", pulse_parameter='pi_pulse', sweep_parameter="gain"),
