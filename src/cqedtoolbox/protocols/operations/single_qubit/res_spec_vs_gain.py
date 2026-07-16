@@ -10,7 +10,7 @@ plt.switch_backend("agg")
 
 from labcore.analysis import DatasetAnalysis
 from labcore.measurement.storage import run_and_save_sweep
-from labcore.data.datadict_storage import datadict_from_hdf5
+from labcore.data.datadict_storage import datadict_from_hdf5, load_as_xr
 from labcore.measurement import sweep_parameter
 from labcore.measurement.record import recording, dep, indep
 
@@ -22,8 +22,10 @@ from cqedtoolbox.protocols.parameters import (
     EndReadoutFrequency,
     ReadoutGain,
     ReadoutLength, StartReadoutGain, EndReadoutGain, ResonatorSpecSteps, ResonatorSpecVsGainSteps,
+    nestedAttributeFromString,
 )
 from cqedtoolbox.protocols.operations.single_qubit.res_spec import ResonatorSpectroscopy, SyntheticHangerResonatorData
+from cqedtoolbox.measurement_lib.opx.advanced.qubit_tuneup import measure_pulse_resonator_spec_vs_readout_amp
 from cqedtoolbox.measurement_lib.qick.single_transmon_v2 import FreqGainSweepProgram
 
 
@@ -41,6 +43,12 @@ class ResSpecVsGainSNRThreshold(CorrectionParameter):
     def _qick_setter(self, v):
         self.params.corrections.res_spec_vs_gain.snr(v)
 
+    def _opx_getter(self):
+        return self.params.corrections.res_spec_vs_gain.snr()
+
+    def _opx_setter(self, v):
+        self.params.corrections.res_spec_vs_gain.snr(v)
+
 
 @dataclass
 class ResSpecVsGainMaxFitParamError(CorrectionParameter):
@@ -51,6 +59,12 @@ class ResSpecVsGainMaxFitParamError(CorrectionParameter):
         return self.params.corrections.res_spec_vs_gain.max_fit_param_error()
 
     def _qick_setter(self, v):
+        self.params.corrections.res_spec_vs_gain.max_fit_param_error(v)
+
+    def _opx_getter(self):
+        return self.params.corrections.res_spec_vs_gain.max_fit_param_error()
+
+    def _opx_setter(self, v):
         self.params.corrections.res_spec_vs_gain.max_fit_param_error(v)
 
 
@@ -65,6 +79,12 @@ class ResSpecVsGainHighSNRThreshold(CorrectionParameter):
     def _qick_setter(self, v):
         self.params.corrections.res_spec_vs_gain.high_snr(v)
 
+    def _opx_getter(self):
+        return self.params.corrections.res_spec_vs_gain.high_snr()
+
+    def _opx_setter(self, v):
+        self.params.corrections.res_spec_vs_gain.high_snr(v)
+
 
 @dataclass
 class ResSpecVsGainRepetitionFactor(CorrectionParameter):
@@ -77,6 +97,12 @@ class ResSpecVsGainRepetitionFactor(CorrectionParameter):
     def _qick_setter(self, v):
         self.params.corrections.res_spec_vs_gain.rep_factor(v)
 
+    def _opx_getter(self):
+        return self.params.corrections.res_spec_vs_gain.rep_factor()
+
+    def _opx_setter(self, v):
+        self.params.corrections.res_spec_vs_gain.rep_factor(v)
+
 
 @dataclass
 class ResSpecVsGainMaxRepetitionIncreases(CorrectionParameter):
@@ -87,6 +113,12 @@ class ResSpecVsGainMaxRepetitionIncreases(CorrectionParameter):
         return int(self.params.corrections.res_spec_vs_gain.max_rep_increases())
 
     def _qick_setter(self, v):
+        self.params.corrections.res_spec_vs_gain.max_rep_increases(v)
+
+    def _opx_getter(self):
+        return int(self.params.corrections.res_spec_vs_gain.max_rep_increases())
+
+    def _opx_setter(self, v):
         self.params.corrections.res_spec_vs_gain.max_rep_increases(v)
 
 
@@ -126,6 +158,7 @@ class ResonatorSpectroscopyVsGain(ProtocolOperation):
 
     def __init__(self, params):
         super().__init__()
+        self.params = params
 
         self._register_inputs(
             repetitions=Repetition(params),
@@ -181,6 +214,12 @@ class ResonatorSpectroscopyVsGain(ProtocolOperation):
 
         return loc
 
+    def _measure_opx(self) -> Path:
+        logger.info("Starting opx resonator spectroscopy vs gain measurement")
+        loc = measure_pulse_resonator_spec_vs_readout_amp()
+        logger.info("Measurement complete")
+        return loc
+
     def _load_data_qick(self):
         path = self.data_loc / "data.ddh5"
         if not path.exists():
@@ -190,6 +229,14 @@ class ResonatorSpectroscopyVsGain(ProtocolOperation):
         self.independents["frequencies"] = data["freq"]["values"]
         self.independents["gains"] = data["gain"]["values"]
         self.dependents["signal"] = data["signal"]["values"]
+
+    def _load_data_opx(self):
+        data = load_as_xr(self.data_loc).mean("repetition")
+        q = nestedAttributeFromString(self.params, "active.qubit")()
+        lo = nestedAttributeFromString(self.params, f"{q}.readout.LO")()
+        self.independents["frequencies"] = data["ssb_frequency"].values + lo
+        self.independents["gains"] = data["amp"].values
+        self.dependents["signal"] = data["signal_Re"].values + 1j * data["signal_Im"].values
 
     def _measure_dummy(self) -> Path:
 

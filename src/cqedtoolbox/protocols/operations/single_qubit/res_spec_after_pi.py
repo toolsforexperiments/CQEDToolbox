@@ -11,7 +11,7 @@ from labcore.analysis import DatasetAnalysis
 from labcore.measurement.storage import run_and_save_sweep
 from labcore.measurement.sweep import sweep_parameter
 from labcore.measurement.record import record_as
-from labcore.data.datadict_storage import datadict_from_hdf5
+from labcore.data.datadict_storage import datadict_from_hdf5, load_as_xr
 
 from labcore.protocols.base import (ProtocolOperation, OperationStatus, serialize_fit_params,
                                     CorrectionParameter, CheckResult, EvaluateResult)
@@ -22,8 +22,10 @@ from cqedtoolbox.protocols.parameters import (
     EndReadoutFrequency,
     ReadoutGain,
     ReadoutLength,
-    Detuning
+    Detuning,
+    nestedAttributeFromString,
 )
+from cqedtoolbox.measurement_lib.opx.advanced.qubit_tuneup import measure_pulse_resonator_spec_after_pi_pulse
 from cqedtoolbox.measurement_lib.qick.single_transmon_v2 import FreqSweepProgram, ResProbeProgram
 
 from cqedtoolbox.fitfuncs.resonators import HangerResponseBruno
@@ -46,6 +48,12 @@ class ResSpecAfterPiSNRThreshold(CorrectionParameter):
     def _qick_setter(self, value):
         self.params.corrections.res_spec_after_pi.snr(value)
 
+    def _opx_getter(self):
+        return self.params.corrections.res_spec_after_pi.snr()
+
+    def _opx_setter(self, value):
+        self.params.corrections.res_spec_after_pi.snr(value)
+
 
 @dataclass
 class ResSpecAfterPiMaxFitParamError(CorrectionParameter):
@@ -56,6 +64,12 @@ class ResSpecAfterPiMaxFitParamError(CorrectionParameter):
         return self.params.corrections.res_spec_after_pi.max_fit_param_error()
 
     def _qick_setter(self, value):
+        self.params.corrections.res_spec_after_pi.max_fit_param_error(value)
+
+    def _opx_getter(self):
+        return self.params.corrections.res_spec_after_pi.max_fit_param_error()
+
+    def _opx_setter(self, value):
         self.params.corrections.res_spec_after_pi.max_fit_param_error(value)
 
 
@@ -70,11 +84,18 @@ class DetuningThreshold(CorrectionParameter):
     def _qick_setter(self, value):
         self.params.corrections.res_spec_after_pi.detuning_threshold(value)
 
+    def _opx_getter(self):
+        return self.params.corrections.res_spec_after_pi.detuning_threshold()
+
+    def _opx_setter(self, value):
+        self.params.corrections.res_spec_after_pi.detuning_threshold(value)
+
 
 class ResonatorSpectroscopyAfterPi(ProtocolOperation):
 
     def __init__(self, params):
         super().__init__()
+        self.params = params
 
         self._register_inputs(
             repetitions=Repetition(params),
@@ -186,6 +207,14 @@ class ResonatorSpectroscopyAfterPi(ProtocolOperation):
         # Return the "before" location as the primary data_loc for compatibility
         return loc_before
 
+    def _measure_opx(self) -> Path:
+        logger.info("Starting opx resonator spectroscopy before/after pi measurement")
+        loc = measure_pulse_resonator_spec_after_pi_pulse()
+        self.data_loc_before = loc
+        self.data_loc_after = loc
+        logger.info("Measurement complete")
+        return loc
+
     def _add_mag_and_unwind_and_fit(self, frequencies, signal_raw, fig_title="") -> tuple:
         """Unwind phase, calculate magnitude, and fit with hanger response"""
         phase_unwrap = np.unwrap(np.angle(signal_raw))
@@ -232,6 +261,19 @@ class ResonatorSpectroscopyAfterPi(ProtocolOperation):
 
         self.independents_after["frequencies"] = data_after["freq"]["values"]
         self.dependents_after["signal"] = data_after["signal"]["values"]
+
+    def _load_data_opx(self):
+        data = load_as_xr(self.data_loc).mean("repetition")
+        q = nestedAttributeFromString(self.params, "active.qubit")()
+        lo = nestedAttributeFromString(self.params, f"{q}.readout.LO")()
+
+        before = data.sel(setting=1)
+        self.independents_before["frequencies"] = before["ssb_frequency"].values + lo
+        self.dependents_before["signal"] = before["signal_Re"].values + 1j * before["signal_Im"].values
+
+        after = data.sel(setting=2)
+        self.independents_after["frequencies"] = after["ssb_frequency"].values + lo
+        self.dependents_after["signal"] = after["signal_Re"].values + 1j * after["signal_Im"].values
 
     def analyze(self):
         # Analyze before measurement

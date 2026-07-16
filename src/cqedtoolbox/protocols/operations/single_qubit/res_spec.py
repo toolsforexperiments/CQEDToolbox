@@ -8,14 +8,15 @@ import matplotlib.pyplot as plt
 
 from labcore.analysis import DatasetAnalysis, FitResult
 from labcore.measurement.storage import run_and_save_sweep
-from labcore.data.datadict_storage import datadict_from_hdf5
+from labcore.data.datadict_storage import datadict_from_hdf5, load_as_xr
 from labcore.measurement import sweep_parameter, record_as
 
 from labcore.protocols.base import (ProtocolOperation, OperationStatus, serialize_fit_params,
                                     ParamImprovement, CorrectionParameter, CheckResult, Correction)
 from cqedtoolbox.protocols.parameters import (Repetition,
                                               ResonatorSpecSteps, ReadoutGain, ReadoutLength, StartReadoutFrequency,
-                                              EndReadoutFrequency, ReadoutFrequency)
+                                              EndReadoutFrequency, ReadoutFrequency, nestedAttributeFromString)
+from cqedtoolbox.measurement_lib.opx.advanced.qubit_tuneup import measure_pulse_resonator_spec
 from cqedtoolbox.measurement_lib.qick.single_transmon_v2 import FreqSweepProgram
 
 from cqedtoolbox.fitfuncs.resonators import HangerResponseBruno
@@ -63,6 +64,11 @@ class SNRThreshold(CorrectionParameter):
     def _qick_setter(self, value):
         self.params.corrections.res_spec.snr(value)
 
+    def _opx_getter(self):
+        return self.params.corrections.res_spec.snr()
+
+    def _opx_setter(self, value):
+        self.params.corrections.res_spec.snr(value)
 
 @dataclass
 class MaxWindowShifts(CorrectionParameter):
@@ -75,6 +81,11 @@ class MaxWindowShifts(CorrectionParameter):
     def _qick_setter(self, value):
         self.params.corrections.res_spec.max_window_shifts(value)
 
+    def _opx_getter(self):
+        return int(self.params.corrections.res_spec.max_window_shifts())
+
+    def _opx_setter(self, value):
+        self.params.corrections.res_spec.max_window_shifts(value)
 
 @dataclass
 class SamplingIncreaseFactor(CorrectionParameter):
@@ -87,6 +98,11 @@ class SamplingIncreaseFactor(CorrectionParameter):
     def _qick_setter(self, value):
         self.params.corrections.res_spec.sampling_factor(value)
 
+    def _opx_getter(self):
+        return self.params.corrections.res_spec.sampling_factor()
+
+    def _opx_setter(self, value):
+        self.params.corrections.res_spec.sampling_factor(value)
 
 @dataclass
 class MaxSamplingIncreases(CorrectionParameter):
@@ -99,6 +115,11 @@ class MaxSamplingIncreases(CorrectionParameter):
     def _qick_setter(self, value):
         self.params.corrections.res_spec.max_sampling_increases(value)
 
+    def _opx_getter(self):
+        return int(self.params.corrections.res_spec.max_sampling_increases())
+
+    def _opx_setter(self, value):
+        self.params.corrections.res_spec.max_sampling_increases(value)
 
 @dataclass
 class AveragingIncreaseFactor(CorrectionParameter):
@@ -111,6 +132,11 @@ class AveragingIncreaseFactor(CorrectionParameter):
     def _qick_setter(self, value):
         self.params.corrections.res_spec.averaging_factor(value)
 
+    def _opx_getter(self):
+        return self.params.corrections.res_spec.averaging_factor()
+
+    def _opx_setter(self, value):
+        self.params.corrections.res_spec.averaging_factor(value)
 
 @dataclass
 class MaxAveragingIncreases(CorrectionParameter):
@@ -123,6 +149,11 @@ class MaxAveragingIncreases(CorrectionParameter):
     def _qick_setter(self, value):
         self.params.corrections.res_spec.max_averaging_increases(value)
 
+    def _opx_getter(self):
+        return int(self.params.corrections.res_spec.max_averaging_increases())
+
+    def _opx_setter(self, value):
+        self.params.corrections.res_spec.max_averaging_increases(value)
 
 @dataclass
 class MaxFitParamError(CorrectionParameter):
@@ -135,6 +166,11 @@ class MaxFitParamError(CorrectionParameter):
     def _qick_setter(self, value):
         self.params.corrections.res_spec.max_fit_param_error(value)
 
+    def _opx_getter(self):
+        return self.params.corrections.res_spec.max_fit_param_error()
+
+    def _opx_setter(self, value):
+        self.params.corrections.res_spec.max_fit_param_error(value)
 
 class WindowShiftCorrection(Correction):
     name = "window_shift"
@@ -264,6 +300,7 @@ class ResonatorSpectroscopy(ProtocolOperation):
     
     def __init__(self, params):
         super().__init__()
+        self.params = params
 
         self._register_inputs(
             repetitions=Repetition(params),
@@ -348,6 +385,12 @@ class ResonatorSpectroscopy(ProtocolOperation):
         logger.info("Measurement complete")
 
         return loc
+
+    def _measure_opx(self) -> Path:
+        logger.info("Starting opx resonator spectroscopy measurement")
+        loc = measure_pulse_resonator_spec()
+        logger.info("Measurement complete")
+        return loc
     
     def _measure_dummy(self):
         logger.info("Starting dummy resonator spectroscopy measurement")
@@ -416,6 +459,13 @@ class ResonatorSpectroscopy(ProtocolOperation):
         self.independents["frequencies"] = data["freq"]["values"]
         self.dependents["signal"] = data["signal"]["values"]
 
+    def _load_data_opx(self):
+        data = load_as_xr(self.data_loc).mean("repetition")
+        q = nestedAttributeFromString(self.params, "active.qubit")()
+        lo = nestedAttributeFromString(self.params, f"{q}.readout.LO")()
+        self.independents["frequencies"] = data["ssb_frequency"].values + lo
+        self.dependents["signal"] = data["signal_Re"].values + 1j * data["signal_Im"].values
+
     def _load_data_dummy(self):
         path = self.data_loc/"data.ddh5"
         if not path.exists():
@@ -471,4 +521,3 @@ class ResonatorSpectroscopy(ProtocolOperation):
             parts.append(f"high-error params: {', '.join(bad_params)}")
 
         return CheckResult("quality_check", passed, "; ".join(parts))
-

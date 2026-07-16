@@ -12,7 +12,7 @@ plt.switch_backend("agg")
 from labcore.analysis import DatasetAnalysis, Fit
 from labcore.analysis.fitfuncs.generic import Lorentzian
 from labcore.measurement.storage import run_and_save_sweep
-from labcore.data.datadict_storage import datadict_from_hdf5
+from labcore.data.datadict_storage import datadict_from_hdf5, load_as_xr
 from labcore.measurement.sweep import sweep_parameter
 from labcore.measurement.record import record_as
 
@@ -25,6 +25,7 @@ from cqedtoolbox.protocols.parameters import (
     StartSaturationSpecFrequency, EndSaturationSpecFrequency, QubitFrequency,
     SaturationSpecDriveGain,
 )
+from cqedtoolbox.measurement_lib.opx.advanced.qubit_tuneup import measure_qubit_ssb_spec_saturation
 from cqedtoolbox.measurement_lib.qick.single_transmon_v2 import PulseProbeSpectroscopy
 
 
@@ -46,6 +47,12 @@ class SNRThreshold(CorrectionParameter):
     def _qick_setter(self, value):
         self.params.corrections.sat_spec.snr(value)
 
+    def _opx_getter(self):
+        return self.params.corrections.sat_spec.snr()
+
+    def _opx_setter(self, value):
+        self.params.corrections.sat_spec.snr(value)
+
 
 @dataclass
 class MaxFitParamError(CorrectionParameter):
@@ -56,6 +63,12 @@ class MaxFitParamError(CorrectionParameter):
         return self.params.corrections.sat_spec.max_fit_param_error()
 
     def _qick_setter(self, value):
+        self.params.corrections.sat_spec.max_fit_param_error(value)
+
+    def _opx_getter(self):
+        return self.params.corrections.sat_spec.max_fit_param_error()
+
+    def _opx_setter(self, value):
         self.params.corrections.sat_spec.max_fit_param_error(value)
 
 
@@ -70,6 +83,12 @@ class MaxWindowShifts(CorrectionParameter):
     def _qick_setter(self, value):
         self.params.corrections.sat_spec.max_window_shifts(value)
 
+    def _opx_getter(self):
+        return int(self.params.corrections.sat_spec.max_window_shifts())
+
+    def _opx_setter(self, value):
+        self.params.corrections.sat_spec.max_window_shifts(value)
+
 
 @dataclass
 class AveragingIncreaseFactor(CorrectionParameter):
@@ -80,6 +99,12 @@ class AveragingIncreaseFactor(CorrectionParameter):
         return self.params.corrections.sat_spec.averaging_factor()
 
     def _qick_setter(self, value):
+        self.params.corrections.sat_spec.averaging_factor(value)
+
+    def _opx_getter(self):
+        return self.params.corrections.sat_spec.averaging_factor()
+
+    def _opx_setter(self, value):
         self.params.corrections.sat_spec.averaging_factor(value)
 
 
@@ -94,6 +119,12 @@ class MaxAveragingIncreases(CorrectionParameter):
     def _qick_setter(self, value):
         self.params.corrections.sat_spec.max_averaging_increases(value)
 
+    def _opx_getter(self):
+        return int(self.params.corrections.sat_spec.max_averaging_increases())
+
+    def _opx_setter(self, value):
+        self.params.corrections.sat_spec.max_averaging_increases(value)
+
 
 @dataclass
 class SamplingIncreaseFactor(CorrectionParameter):
@@ -104,6 +135,12 @@ class SamplingIncreaseFactor(CorrectionParameter):
         return self.params.corrections.sat_spec.sampling_factor()
 
     def _qick_setter(self, value):
+        self.params.corrections.sat_spec.sampling_factor(value)
+
+    def _opx_getter(self):
+        return self.params.corrections.sat_spec.sampling_factor()
+
+    def _opx_setter(self, value):
         self.params.corrections.sat_spec.sampling_factor(value)
 
 
@@ -118,6 +155,12 @@ class MaxSamplingIncreases(CorrectionParameter):
     def _qick_setter(self, value):
         self.params.corrections.sat_spec.max_sampling_increases(value)
 
+    def _opx_getter(self):
+        return int(self.params.corrections.sat_spec.max_sampling_increases())
+
+    def _opx_setter(self, value):
+        self.params.corrections.sat_spec.max_sampling_increases(value)
+
 
 @dataclass
 class MaxPowerIncreases(CorrectionParameter):
@@ -128,6 +171,12 @@ class MaxPowerIncreases(CorrectionParameter):
         return int(self.params.corrections.sat_spec.max_power_increases())
 
     def _qick_setter(self, value):
+        self.params.corrections.sat_spec.max_power_increases(value)
+
+    def _opx_getter(self):
+        return int(self.params.corrections.sat_spec.max_power_increases())
+
+    def _opx_setter(self, value):
         self.params.corrections.sat_spec.max_power_increases(value)
 
 
@@ -142,6 +191,12 @@ class PowerIncreaseFactor(CorrectionParameter):
     def _qick_setter(self, value):
         self.params.corrections.sat_spec.power_increase_factor(value)
 
+    def _opx_getter(self):
+        return self.params.corrections.sat_spec.power_increase_factor()
+
+    def _opx_setter(self, value):
+        self.params.corrections.sat_spec.power_increase_factor(value)
+
 
 @dataclass
 class SinglePeakSNRThreshold(CorrectionParameter):
@@ -152,6 +207,12 @@ class SinglePeakSNRThreshold(CorrectionParameter):
         return self.params.corrections.sat_spec.single_peak_snr()
 
     def _qick_setter(self, value):
+        self.params.corrections.sat_spec.single_peak_snr(value)
+
+    def _opx_getter(self):
+        return self.params.corrections.sat_spec.single_peak_snr()
+
+    def _opx_setter(self, value):
         self.params.corrections.sat_spec.single_peak_snr(value)
 
 
@@ -166,6 +227,12 @@ class SinglePeakMaxPowerReductions(CorrectionParameter):
     def _qick_setter(self, value):
         self.params.corrections.sat_spec.single_peak_max_reductions(value)
 
+    def _opx_getter(self):
+        return int(self.params.corrections.sat_spec.single_peak_max_reductions())
+
+    def _opx_setter(self, value):
+        self.params.corrections.sat_spec.single_peak_max_reductions(value)
+
 
 @dataclass
 class PowerReductionFactor(CorrectionParameter):
@@ -176,6 +243,12 @@ class PowerReductionFactor(CorrectionParameter):
         return self.params.corrections.sat_spec.power_reduction_factor()
 
     def _qick_setter(self, value):
+        self.params.corrections.sat_spec.power_reduction_factor(value)
+
+    def _opx_getter(self):
+        return self.params.corrections.sat_spec.power_reduction_factor()
+
+    def _opx_setter(self, value):
         self.params.corrections.sat_spec.power_reduction_factor(value)
 
 
@@ -411,6 +484,7 @@ class SaturationSpectroscopy(ProtocolOperation):
 
     def __init__(self, params):
         super().__init__()
+        self.params = params
 
         self._register_inputs(
             repetitions=Repetition(params),
@@ -500,6 +574,12 @@ class SaturationSpectroscopy(ProtocolOperation):
 
         return loc
 
+    def _measure_opx(self) -> Path:
+        logger.info("Starting opx saturation spectroscopy measurement")
+        loc = measure_qubit_ssb_spec_saturation()
+        logger.info("Measurement complete")
+        return loc
+
     def _load_data_qick(self):
         path = self.data_loc / "data.ddh5"
         if not path.exists():
@@ -508,6 +588,11 @@ class SaturationSpectroscopy(ProtocolOperation):
 
         self.independents["frequencies"] = data["freq"]["values"]
         self.dependents["signal"] = data["signal"]["values"]
+
+    def _load_data_opx(self):
+        data = load_as_xr(self.data_loc).mean("repetition")
+        self.independents["frequencies"] = data["ssb_frequency"].values
+        self.dependents["signal"] = data["signal_Re"].values + 1j * data["signal_Im"].values
 
     def _measure_dummy(self) -> Path:
         """Create synthetic saturation spectroscopy data using a sweep"""

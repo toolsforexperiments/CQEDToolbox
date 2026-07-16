@@ -11,7 +11,7 @@ from labcore.analysis import DatasetAnalysis
 from labcore.analysis.fitfuncs.generic import Cosine
 from labcore.measurement.storage import run_and_save_sweep
 from labcore.measurement import sweep_parameter, record_as
-from labcore.data.datadict_storage import datadict_from_hdf5
+from labcore.data.datadict_storage import datadict_from_hdf5, load_as_xr
 
 from labcore.protocols.base import (
     ProtocolOperation, serialize_fit_params,
@@ -25,6 +25,7 @@ from cqedtoolbox.protocols.parameters import (
     NumGainSteps,
     Delay,
 )
+from cqedtoolbox.measurement_lib.opx.advanced.qubit_tuneup import measure_power_rabi
 from cqedtoolbox.measurement_lib.qick.single_transmon_v2 import AmplitudeRabiProgram
 
 
@@ -42,6 +43,8 @@ class SNRThreshold(CorrectionParameter):
 
     def _qick_getter(self): return self.params.corrections.power_rabi.snr()
     def _qick_setter(self, v): self.params.corrections.power_rabi.snr(v)
+    def _opx_getter(self): return self.params.corrections.power_rabi.snr()
+    def _opx_setter(self, v): self.params.corrections.power_rabi.snr(v)
 
 
 @dataclass
@@ -51,6 +54,8 @@ class MaxFitParamError(CorrectionParameter):
 
     def _qick_getter(self): return self.params.corrections.power_rabi.max_fit_param_error()
     def _qick_setter(self, v): self.params.corrections.power_rabi.max_fit_param_error(v)
+    def _opx_getter(self): return self.params.corrections.power_rabi.max_fit_param_error()
+    def _opx_setter(self, v): self.params.corrections.power_rabi.max_fit_param_error(v)
 
 
 @dataclass
@@ -60,6 +65,8 @@ class AveragingIncreaseFactor(CorrectionParameter):
 
     def _qick_getter(self): return self.params.corrections.power_rabi.averaging_factor()
     def _qick_setter(self, v): self.params.corrections.power_rabi.averaging_factor(v)
+    def _opx_getter(self): return self.params.corrections.power_rabi.averaging_factor()
+    def _opx_setter(self, v): self.params.corrections.power_rabi.averaging_factor(v)
 
 
 @dataclass
@@ -69,6 +76,8 @@ class MaxAveragingIncreases(CorrectionParameter):
 
     def _qick_getter(self): return int(self.params.corrections.power_rabi.max_averaging_increases())
     def _qick_setter(self, v): self.params.corrections.power_rabi.max_averaging_increases(v)
+    def _opx_getter(self): return int(self.params.corrections.power_rabi.max_averaging_increases())
+    def _opx_setter(self, v): self.params.corrections.power_rabi.max_averaging_increases(v)
 
 
 @dataclass
@@ -78,6 +87,8 @@ class SamplingIncreaseFactor(CorrectionParameter):
 
     def _qick_getter(self): return self.params.corrections.power_rabi.sampling_factor()
     def _qick_setter(self, v): self.params.corrections.power_rabi.sampling_factor(v)
+    def _opx_getter(self): return self.params.corrections.power_rabi.sampling_factor()
+    def _opx_setter(self, v): self.params.corrections.power_rabi.sampling_factor(v)
 
 
 @dataclass
@@ -87,6 +98,8 @@ class MaxSamplingIncreases(CorrectionParameter):
 
     def _qick_getter(self): return int(self.params.corrections.power_rabi.max_sampling_increases())
     def _qick_setter(self, v): self.params.corrections.power_rabi.max_sampling_increases(v)
+    def _opx_getter(self): return int(self.params.corrections.power_rabi.max_sampling_increases())
+    def _opx_setter(self, v): self.params.corrections.power_rabi.max_sampling_increases(v)
 
 
 @dataclass
@@ -96,6 +109,8 @@ class DelayIncreaseFactor(CorrectionParameter):
 
     def _qick_getter(self): return self.params.corrections.power_rabi.delay_factor()
     def _qick_setter(self, v): self.params.corrections.power_rabi.delay_factor(v)
+    def _opx_getter(self): return self.params.corrections.power_rabi.delay_factor()
+    def _opx_setter(self, v): self.params.corrections.power_rabi.delay_factor(v)
 
 
 @dataclass
@@ -105,6 +120,8 @@ class MaxDelayIncreases(CorrectionParameter):
 
     def _qick_getter(self): return int(self.params.corrections.power_rabi.max_delay_increases())
     def _qick_setter(self, v): self.params.corrections.power_rabi.max_delay_increases(v)
+    def _opx_getter(self): return int(self.params.corrections.power_rabi.max_delay_increases())
+    def _opx_setter(self, v): self.params.corrections.power_rabi.max_delay_increases(v)
 
 
 @dataclass
@@ -114,6 +131,8 @@ class GainRangeShrinkFactor(CorrectionParameter):
 
     def _qick_getter(self): return self.params.corrections.power_rabi.gain_shrink_factor()
     def _qick_setter(self, v): self.params.corrections.power_rabi.gain_shrink_factor(v)
+    def _opx_getter(self): return self.params.corrections.power_rabi.gain_shrink_factor()
+    def _opx_setter(self, v): self.params.corrections.power_rabi.gain_shrink_factor(v)
 
 
 @dataclass
@@ -123,6 +142,8 @@ class MaxGainRangeShrinks(CorrectionParameter):
 
     def _qick_getter(self): return int(self.params.corrections.power_rabi.max_gain_shrinks())
     def _qick_setter(self, v): self.params.corrections.power_rabi.max_gain_shrinks(v)
+    def _opx_getter(self): return int(self.params.corrections.power_rabi.max_gain_shrinks())
+    def _opx_setter(self, v): self.params.corrections.power_rabi.max_gain_shrinks(v)
 
 
 # ---------------------------------------------------------------------------
@@ -284,6 +305,7 @@ class PowerRabi(ProtocolOperation):
 
     def __init__(self, params):
         super().__init__()
+        self.params = params
 
         self._register_inputs(
             repetitions=Repetition(params),
@@ -368,6 +390,12 @@ class PowerRabi(ProtocolOperation):
 
         return loc
 
+    def _measure_opx(self) -> Path:
+        logger.info("Starting opx power rabi measurement")
+        loc = measure_power_rabi()
+        logger.info("Measurement complete")
+        return loc
+
     def _measure_dummy(self):
         logger.info("Starting dummy power rabi measurement")
         gains = np.linspace(self.start_gain(), self.end_gain(), int(self.steps_gain()))
@@ -390,6 +418,11 @@ class PowerRabi(ProtocolOperation):
 
         self.independents["gains"] = data["gain"]["values"]
         self.dependents["signal"] = data["signal"]["values"]
+
+    def _load_data_opx(self):
+        data = load_as_xr(self.data_loc).mean("repetition")
+        self.independents["gains"] = data["amplitude"].values
+        self.dependents["signal"] = data["signal_Re"].values + 1j * data["signal_Im"].values
 
     def _load_data_dummy(self):
         path = self.data_loc / "data.ddh5"

@@ -12,10 +12,10 @@ from labcore.analysis.fitfuncs.generic import ExponentiallyDecayingSine
 from labcore.measurement.storage import run_and_save_sweep
 from labcore.measurement.sweep import sweep_parameter
 from labcore.measurement.record import record_as
-from labcore.data.datadict_storage import datadict_from_hdf5
+from labcore.data.datadict_storage import datadict_from_hdf5, load_as_xr
 
 from labcore.protocols.base import (
-    ProtocolOperation, serialize_fit_params,
+    ProtocolOperation, PlatformTypes, serialize_fit_params,
     CorrectionParameter, CheckResult, Correction, EvaluateResult,
 )
 from cqedtoolbox.protocols.parameters import (
@@ -27,6 +27,7 @@ from cqedtoolbox.protocols.parameters import (
     T2E,
     NEchos
 )
+from cqedtoolbox.measurement_lib.opx.advanced.qubit_tuneup import measure_t2
 from cqedtoolbox.measurement_lib.qick.single_transmon_v2 import T2nProgram
 
 
@@ -44,6 +45,8 @@ class SNRMinThreshold(CorrectionParameter):
 
     def _qick_getter(self): return self.params.corrections.t2e.snr_min()
     def _qick_setter(self, v): self.params.corrections.t2e.snr_min(v)
+    def _opx_getter(self): return self.params.corrections.t2e.snr_min()
+    def _opx_setter(self, v): self.params.corrections.t2e.snr_min(v)
 
 
 @dataclass
@@ -53,6 +56,8 @@ class MaxFitParamError(CorrectionParameter):
 
     def _qick_getter(self): return self.params.corrections.t2e.max_fit_param_error()
     def _qick_setter(self, v): self.params.corrections.t2e.max_fit_param_error(v)
+    def _opx_getter(self): return self.params.corrections.t2e.max_fit_param_error()
+    def _opx_setter(self, v): self.params.corrections.t2e.max_fit_param_error(v)
 
 
 @dataclass
@@ -62,6 +67,8 @@ class MaxEchos(CorrectionParameter):
 
     def _qick_getter(self): return int(self.params.corrections.t2e.max_echos())
     def _qick_setter(self, v): self.params.corrections.t2e.max_echos(v)
+    def _opx_getter(self): return int(self.params.corrections.t2e.max_echos())
+    def _opx_setter(self, v): self.params.corrections.t2e.max_echos(v)
 
 
 @dataclass
@@ -71,6 +78,8 @@ class AveragingIncreaseFactor(CorrectionParameter):
 
     def _qick_getter(self): return self.params.corrections.t2e.averaging_factor()
     def _qick_setter(self, v): self.params.corrections.t2e.averaging_factor(v)
+    def _opx_getter(self): return self.params.corrections.t2e.averaging_factor()
+    def _opx_setter(self, v): self.params.corrections.t2e.averaging_factor(v)
 
 
 @dataclass
@@ -80,6 +89,8 @@ class MaxAveragingIncreases(CorrectionParameter):
 
     def _qick_getter(self): return int(self.params.corrections.t2e.max_averaging_increases())
     def _qick_setter(self, v): self.params.corrections.t2e.max_averaging_increases(v)
+    def _opx_getter(self): return int(self.params.corrections.t2e.max_averaging_increases())
+    def _opx_setter(self, v): self.params.corrections.t2e.max_averaging_increases(v)
 
 
 # ---------------------------------------------------------------------------
@@ -187,10 +198,6 @@ class T2EOperation(ProtocolOperation):
             max_averaging_increases=MaxAveragingIncreases(params),
         )
 
-        self._increase_echos = IncreaseEchosCorrection(
-            self.n_echos,
-            self.max_echos,
-        )
         self._increase_averaging = IncreaseAveragingCorrection(
             self.repetitions,
             self._increase_echos,
@@ -198,8 +205,8 @@ class T2EOperation(ProtocolOperation):
             self.max_averaging_increases,
         )
 
-        self._register_check("quality_check", self._check_quality,
-                             [self._increase_echos, self._increase_averaging])
+        corrections = [self._increase_averaging]
+        self._register_check("quality_check", self._check_quality, corrections)
 
         self._register_success_update(self.t2e, lambda: self._winner_fit.params["tau"].value)
 
@@ -244,6 +251,12 @@ class T2EOperation(ProtocolOperation):
         logger.info("Measurement complete")
         return loc
 
+    def _measure_opx(self) -> Path:
+        logger.info("Starting opx T2 Echo measurement")
+        loc = measure_t2(n_echos=1)
+        logger.info("Measurement complete")
+        return loc
+
     def _load_data_qick(self):
         path = self.data_loc / "data.ddh5"
         if not path.exists():
@@ -252,6 +265,11 @@ class T2EOperation(ProtocolOperation):
 
         self.independents["delays"] = data["t"]["values"]
         self.dependents["signal"] = data["signal"]["values"]
+
+    def _load_data_opx(self):
+        data = load_as_xr(self.data_loc).mean("repetition")
+        self.independents["delays"] = data["delay"].values
+        self.dependents["signal"] = data["signal_Re"].values + 1j * data["signal_Im"].values
 
     def _fit_exponentially_decaying_sine_components(self, delays, signal, fig_title="") -> tuple:
         """
