@@ -175,6 +175,177 @@ class PulseProbeSpectroscopy(AveragerProgramV2):
 
 
 @QickBoardSweep(
+    PulseVariable("time", pulse_parameter="time_rabi_pulse", sweep_parameter="length"),
+    ComplexQICKData("signal", depends_on=["time"]),
+)
+class TimeRabiProgram(AveragerProgramV2):
+    '''
+    Performs time Rabi on a qubit using a constant pulse with a variable length.
+    The length of the pulse is swept over time to observe Rabi oscillations.
+    '''
+    def _initialize(self, cfg):
+        ro_adc_ch = cfg['ro_adc_ch']
+        ro_dac_ch = cfg['ro_dac_ch']
+        q_dac_ch = cfg['q_dac_ch']
+
+        self.declare_gen(ch=ro_dac_ch, nqz=cfg['ro_nqz'])
+        self.declare_readout(ch=ro_adc_ch, length=cfg['ro_len'])
+
+        self.declare_gen(ch=q_dac_ch, nqz=cfg['q_nqz'])
+
+        
+        # Pump pulse definition
+        self.add_loop("timerabi_q_pulse_lens_loop", self.cfg["timerabi_q_pulse_len_steps"])
+        # self.add_gauss(ch=q_dac_ch, name="gauss", sigma=cfg['q_pi_sigma'], length=cfg['q_pi_n_sigma'] * cfg['q_pi_sigma'], even_length=True)
+        self.add_pulse(ch=q_dac_ch, name="time_rabi_pulse",
+                       style="const",
+                       length=cfg["timerabi_q_pulse_len_loop_var"], # sweep variable
+                       freq=cfg['q_freq'],
+                       phase=cfg['q_pi_phase'],
+                       gain=cfg['timerabi_q_gain'],
+                       )
+        
+        # Probe pulse definition
+        self.add_readoutconfig(ch=ro_adc_ch, name="readout", freq=cfg['ro_freq'], gen_ch=ro_dac_ch)
+        self.add_pulse(ch=ro_dac_ch, name="read_pulse", ro_ch=ro_adc_ch,
+                       style="const",
+                       freq=cfg['ro_freq'],
+                       length=cfg['ro_len'],
+                       phase=cfg['ro_phase'],
+                       gain=cfg['ro_gain'],
+                       )
+        
+    def _body(self, cfg):
+        ro_adc_ch = cfg['ro_adc_ch']
+        ro_dac_ch = cfg['ro_dac_ch']
+        q_dac_ch = cfg['q_dac_ch']
+
+        self.send_readoutconfig(ch=ro_adc_ch, name="readout", t=0)
+
+        self.pulse(ch=q_dac_ch, name='time_rabi_pulse', t=0)
+        self.delay_auto(t=0.0, gens=True, ros=False)
+        self.pulse(ch=ro_dac_ch, name="read_pulse", t=0)
+        self.trigger(ros=[ro_adc_ch], pins=[0], t=cfg['trig_time'])
+
+
+@QickBoardSweep(
+    PulseVariable("time", pulse_parameter="time_rabi_pulse", sweep_parameter="length"),
+    PulseVariable("freq", pulse_parameter="time_rabi_pulse", sweep_parameter="freq"),
+    ComplexQICKData("signal", depends_on=["time", "freq"]),
+)
+class TimeRabiVsFreqProgram(AveragerProgramV2):
+    """
+    Performs time Rabi on a qubit using a constant pulse with a variable length and frequency.
+    """
+
+    def _initialize(self, cfg):
+        ro_adc_ch = cfg['ro_adc_ch']
+        ro_dac_ch = cfg['ro_dac_ch']
+        q_dac_ch = cfg['q_dac_ch']
+
+        self.declare_gen(ch=ro_dac_ch, nqz=cfg['ro_nqz'])
+        self.declare_readout(ch=ro_adc_ch, length=cfg['ro_len'])
+
+        self.declare_gen(ch=q_dac_ch, nqz=cfg['q_nqz'])
+
+        self.add_loop("timerabi_vs_freq_q_freq_loop", self.cfg["timerabi_vs_freq_q_freq_steps"])
+        self.add_loop("timerabi_vs_freq_q_pulse_lens_loop", self.cfg["timerabi_vs_freq_q_pulse_len_steps"])
+
+        self.add_pulse(ch=q_dac_ch, name="time_rabi_pulse",
+                       style="const",
+                       length=cfg["timerabi_vs_freq_q_pulse_len_loop_var"], # sweep variable
+                       freq=cfg["timerabi_vs_freq_q_freq_loop_var"], # sweep variable
+                       phase=cfg['q_pi_phase'],
+                       gain=cfg['timerabi_vs_freq_q_gain'],
+                       )
+        
+        # Probe pulse definition
+        self.add_readoutconfig(ch=ro_adc_ch, name="readout", freq=cfg['ro_freq'], gen_ch=ro_dac_ch)
+        self.add_pulse(ch=ro_dac_ch, name="read_pulse", ro_ch=ro_adc_ch,
+                       style="const",
+                       freq=cfg['ro_freq'],
+                       length=cfg['ro_len'],
+                       phase=cfg['ro_phase'],
+                       gain=cfg['ro_gain'],
+                       )
+        
+    def _body(self, cfg):
+        ro_adc_ch = cfg['ro_adc_ch']
+        ro_dac_ch = cfg['ro_dac_ch']
+        q_dac_ch = cfg['q_dac_ch']
+
+        self.send_readoutconfig(ch=ro_adc_ch, name="readout", t=0)
+
+        self.pulse(ch=q_dac_ch, name='time_rabi_pulse', t=0)
+        self.delay_auto(t=0.0, gens=True, ros=False)
+        self.pulse(ch=ro_dac_ch, name="read_pulse", t=0)
+        self.trigger(ros=[ro_adc_ch], pins=[0], t=cfg['trig_time'])
+
+
+@QickBoardSweep(
+    PulseVariable('freq', pulse_parameter="pump_pulse", sweep_parameter="freq"),
+    ComplexQICKData('signal', depends_on=['freq'])
+)
+class TwoToneSpectroscopy(AveragerProgramV2):
+    '''
+    Performs two-tone spectroscopy where the probe tone is probing the readout resonator
+    while the pump tone excites the qubit.
+    '''
+
+    def _initialize(self, cfg):
+        ro_adc_ch = cfg['ro_adc_ch']
+        ro_dac_ch = cfg['ro_dac_ch']
+        q_dac_ch = cfg['q_dac_ch']
+
+        self.declare_gen(ch=ro_dac_ch, nqz=cfg['ro_nqz'])
+        self.declare_readout(ch=ro_adc_ch, length=cfg['two_tone_spec_ro_len'])
+
+        self.declare_gen(ch=q_dac_ch, nqz=cfg['q_nqz'])
+
+
+
+        # ====== Two tone pulses =======
+        # Pump pulse definition
+        self.add_loop("two_tone_spec_q_freq_loop", self.cfg["two_tone_spec_q_freq_steps"])
+        self.add_pulse(ch=q_dac_ch, name='pump_pulse',
+                       style='const',
+                       freq=cfg['two_tone_spec_q_freq_var'],  # Sweep variable
+                       length=cfg['two_tone_q_len'],
+                       phase=cfg['two_tone_q_const_phase'],
+                       gain=cfg['two_tone_q_const_gain'])
+
+        # Probe pulse definition
+        self.add_readoutconfig(ch=ro_adc_ch, name="readout", freq=cfg['ro_freq'], gen_ch=ro_dac_ch)
+
+        self.add_pulse(ch=ro_dac_ch, name="read_pulse", ro_ch=ro_adc_ch,
+                       style="const",
+                       freq=cfg['ro_freq'],
+                       length=cfg['two_tone_spec_ro_len'],
+                       phase=cfg['ro_phase'],
+                       gain=cfg['ro_gain'],
+                       )
+
+    def _body(self, cfg):
+        ro_adc_ch = cfg['ro_adc_ch']
+        ro_dac_ch = cfg['ro_dac_ch']
+        q_dac_ch = cfg['q_dac_ch']
+
+        # if you delay the config by too long, you can see the readout get reconfigured in the middle of your pulse
+        self.send_readoutconfig(ch=ro_adc_ch, name="readout", t=0)
+
+        self.pulse(ch=q_dac_ch, name='pump_pulse', t=0.05)
+        # self.delay_auto(t=0.05, gens=True, ros=False, tag='wait_time')
+        self.pulse(ch=ro_dac_ch, name="read_pulse", t=0.05)
+        self.trigger(ros=[ro_adc_ch], pins=[0], t=cfg['trig_time'])
+
+    
+
+# @QickBoardSweep(
+#     TimeVariable("t", time_variable="wait_time")
+# )
+
+
+@QickBoardSweep(
     PulseVariable("gain", pulse_parameter='pi_pulse', sweep_parameter="gain"),
     ComplexQICKData("signal", depends_on=["gain"])
 )
