@@ -1,36 +1,24 @@
 
-from cqedtoolbox.instruments.qcodes_drivers.Keysight import N52xx
-
+from qcodes.instrument_drivers.Keysight import KeysightN5222B as qcodes_KeysightN5222B
 from typing import Any
-
-
-
-
-class qcodes_KeysightN5222B(N52xx.PNABase):
-    def __init__(self, name: str, address: str, **kwargs: Any):
-        """Driver for Keysight PNA N5222B."""
-        super().__init__(
-            name,
-            address,
-            min_freq=10e6,
-            max_freq=26.5e9,
-            min_power=-30,
-            max_power=13,
-            nports=4,
-            **kwargs
-        )
-
-        attenuators_options = {"217", "219", "220", "417", "419", "420"}
-        options = set(self.get_options())
-        if attenuators_options.intersection(options):
-            self._set_power_limits(min_power=-95, max_power=13)
 
 
 class KeysightN5222B(qcodes_KeysightN5222B):
 
+
     def set_port_freq(self,range_no,start_freq,stop_freq):
+        ## note that range_no does NOT correspond to the physical ports, but rather to the "ranges" in the pna
         self.write(f'SENS:FOM:RANG{range_no}:FREQ:STAR {start_freq}' ) 
         self.write(f'SENS:FOM:RANG{range_no}:FREQ:STOP {stop_freq}')  
+
+    def get_port_freq(self,range_no):
+        ## note that range_no does NOT correspond to the physical ports, but rather to the "ranges" in the pna
+
+
+        start_freq = self.ask_scpi(f'SENS:FOM:RANG{range_no}:FREQ:STAR?' ) 
+        stop_freq = self.ask_scpi(f'SENS:FOM:RANG{range_no}:FREQ:STOP?' )
+
+        return (start_freq, stop_freq) 
 
     def set_port(self,port,state:str):
         self.write(f":SOUR1:POW{port}:MODE {state}")
