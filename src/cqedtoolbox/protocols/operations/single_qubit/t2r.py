@@ -349,17 +349,17 @@ class T2ROperation(ProtocolOperation):
         if valid:
             self._winner_name, self._winner_snr, self._winner_fit, self._winner_key = valid[0]
             max_error = self.max_fit_param_error()
-            bad_params = []
-            for pname, param in self._winner_fit.params.items():
-                if param.stderr is None:
-                    bad_params.append(f"{pname}(no stderr)")
-                elif param.value == 0 or abs(param.stderr / param.value) > max_error:
-                    pct = abs(param.stderr / param.value) * 100 if param.value != 0 else float("inf")
-                    bad_params.append(f"{pname}({pct:.0f}%)")
-            passed = len(bad_params) == 0
+            param = self._winner_fit.params["tau"]
+            bad_param = None
+            if param.stderr is None:
+                bad_param = "tau(no stderr)"
+            elif param.value == 0 or abs(param.stderr / param.value) > max_error:
+                pct = abs(param.stderr / param.value) * 100 if param.value != 0 else float("inf")
+                bad_param = f"tau({pct:.0f}%)"
+            passed = bad_param is None
             parts = [f"winner={self._winner_name}, SNR={self._winner_snr:.3f} (threshold={snr_min:.1f})"]
-            if bad_params:
-                parts.append(f"high-error params: {', '.join(bad_params)}")
+            if bad_param:
+                parts.append(f"high-error param: {bad_param}")
         else:
             self._winner_name, (self._winner_snr, self._winner_fit, self._winner_key) = self._sorted_components[0]
             passed = False

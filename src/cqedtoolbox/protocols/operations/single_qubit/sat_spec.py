@@ -764,20 +764,18 @@ class SaturationSpectroscopy(ProtocolOperation):
         snr_passed = winner_snr >= threshold
 
         max_error = self.max_fit_param_error()
-        bad_params = []
-        for pname, param in winner_fit.params.items():
-            if pname == "of":
-                continue
-            if param.stderr is None:
-                bad_params.append(f"{pname}(no stderr)")
-            elif param.value == 0 or abs(param.stderr / param.value) > max_error:
-                pct = abs(param.stderr / param.value) * 100 if param.value != 0 else float("inf")
-                bad_params.append(f"{pname}({pct:.0f}%)")
+        param = winner_fit.params["x0"]
+        bad_param = None
+        if param.stderr is None:
+            bad_param = "x0(no stderr)"
+        elif param.value == 0 or abs(param.stderr / param.value) > max_error:
+            pct = abs(param.stderr / param.value) * 100 if param.value != 0 else float("inf")
+            bad_param = f"x0({pct:.0f}%)"
 
-        passed = snr_passed and len(bad_params) == 0
+        passed = snr_passed and bad_param is None
         parts = [f"best_SNR={winner_snr:.3f} (threshold={threshold:.3f}, component={label_map[winner_key]})"]
-        if bad_params:
-            parts.append(f"high-error params: {', '.join(bad_params)}")
+        if bad_param:
+            parts.append(f"high-error param: {bad_param}")
 
         return CheckResult("fit_quality", passed, "; ".join(parts))
 

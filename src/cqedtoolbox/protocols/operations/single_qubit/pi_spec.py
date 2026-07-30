@@ -359,18 +359,18 @@ class PiSpectroscopy(ProtocolOperation):
         snr_passed = self.winner_snr >= threshold
 
         max_error = self.max_fit_param_error()
-        bad_params = []
-        for pname, param in self.winner_fit.params.items():
-            if param.stderr is None:
-                bad_params.append(f"{pname}(no stderr)")
-            elif param.value != 0 and abs(param.stderr / param.value) > max_error:
-                pct = abs(param.stderr / param.value) * 100
-                bad_params.append(f"{pname}({pct:.0f}%)")
+        param = self.winner_fit.params["x0"]
+        bad_param = None
+        if param.stderr is None:
+            bad_param = "x0(no stderr)"
+        elif param.value == 0 or abs(param.stderr / param.value) > max_error:
+            pct = abs(param.stderr / param.value) * 100 if param.value != 0 else float("inf")
+            bad_param = f"x0({pct:.0f}%)"
 
-        passed = snr_passed and len(bad_params) == 0
+        passed = snr_passed and bad_param is None
         parts = [f"SNR={self.winner_snr:.3f} (threshold={threshold:.3f}, component={self.winner_name})"]
-        if bad_params:
-            parts.append(f"high-error params: {', '.join(bad_params)}")
+        if bad_param:
+            parts.append(f"high-error param: {bad_param}")
         return CheckResult("quality_check", passed, "; ".join(parts))
 
     def correct(self, result: EvaluateResult) -> EvaluateResult:

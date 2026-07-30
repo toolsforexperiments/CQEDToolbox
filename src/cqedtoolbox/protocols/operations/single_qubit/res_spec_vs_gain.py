@@ -395,11 +395,11 @@ class ResonatorSpectroscopyVsGain(ProtocolOperation):
             for i, (snr, fit) in enumerate(zip(self.snr_values, self.fit_results)):
                 if snr < snr_threshold:
                     continue
-                bad_fit = any(
-                    (param.stderr is None or param.value == 0 or
-                     abs(param.stderr / param.value) > max_error)
-                    for pname, param in fit.params.items()
-                    if pname not in ["transmission_slope", "phase_slope", "phase_offset"]
+                param = fit.params["f_0"]
+                bad_fit = (
+                    param.stderr is None
+                    or param.value == 0
+                    or abs(param.stderr / param.value) > max_error
                 )
                 if not bad_fit:
                     passing_indices.append(i)
@@ -441,7 +441,7 @@ class ResonatorSpectroscopyVsGain(ProtocolOperation):
             )
 
     def _check_low_gain_quality(self) -> CheckResult:
-        """Quality check (SNR + fit error) for the first 50% of gain traces."""
+        """Quality check (SNR + f_0 error) for the first 50% of gain traces."""
         n_low = max(1, len(self.snr_values) // 2)
         threshold = self.snr_threshold()
         max_error = self.max_fit_param_error()
@@ -453,14 +453,12 @@ class ResonatorSpectroscopyVsGain(ProtocolOperation):
             if snr < threshold:
                 failures.append(f"trace {i}: SNR={snr:.3f} < {threshold:.3f}")
                 continue
-            for pname, param in fit.params.items():
-                if pname in ["transmission_slope", "phase_slope", "phase_offset"]:
-                    continue
-                if param.stderr is None:
-                    failures.append(f"trace {i}/{pname}: no stderr")
-                elif param.value == 0 or abs(param.stderr / param.value) > max_error:
-                    pct = abs(param.stderr / param.value) * 100 if param.value != 0 else float("inf")
-                    failures.append(f"trace {i}/{pname}: {pct:.0f}%")
+            param = fit.params["f_0"]
+            if param.stderr is None:
+                failures.append(f"trace {i}/f_0: no stderr")
+            elif param.value == 0 or abs(param.stderr / param.value) > max_error:
+                pct = abs(param.stderr / param.value) * 100 if param.value != 0 else float("inf")
+                failures.append(f"trace {i}/f_0: {pct:.0f}%")
 
         passed = len(failures) == 0
         desc = (f"first {n_low} traces pass quality check" if passed

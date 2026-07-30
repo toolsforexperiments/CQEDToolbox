@@ -370,20 +370,18 @@ class ResonatorSpectroscopyAfterPi(ProtocolOperation):
         snr_passed = snr >= threshold
 
         max_error = self.max_fit_param_error()
-        bad_params = []
-        for pname, param in fit_result.params.items():
-            if pname in _EXCLUDED_FIT_PARAMS:
-                continue
-            if param.stderr is None:
-                bad_params.append(f"{pname}(no stderr)")
-            elif param.value == 0 or abs(param.stderr / param.value) > max_error:
-                pct = abs(param.stderr / param.value) * 100 if param.value != 0 else float("inf")
-                bad_params.append(f"{pname}({pct:.0f}%)")
+        param = fit_result.params["f_0"]
+        bad_param = None
+        if param.stderr is None:
+            bad_param = "f_0(no stderr)"
+        elif param.value == 0 or abs(param.stderr / param.value) > max_error:
+            pct = abs(param.stderr / param.value) * 100 if param.value != 0 else float("inf")
+            bad_param = f"f_0({pct:.0f}%)"
 
-        passed = snr_passed and len(bad_params) == 0
+        passed = snr_passed and bad_param is None
         parts = [f"SNR={snr:.3f} (threshold={threshold:.3f})"]
-        if bad_params:
-            parts.append(f"high-error params: {', '.join(bad_params)}")
+        if bad_param:
+            parts.append(f"high-error param: {bad_param}")
         return CheckResult(check_name, passed, "; ".join(parts))
 
     def _check_quality_before(self) -> CheckResult:
