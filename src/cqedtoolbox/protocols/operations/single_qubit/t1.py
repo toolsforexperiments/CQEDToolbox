@@ -16,7 +16,7 @@ from labcore.data.datadict_storage import datadict_from_hdf5, load_as_xr
 
 from labcore.protocols.base import (
     ProtocolOperation, serialize_fit_params,
-    CorrectionParameter, CheckResult, Correction, EvaluateResult,
+    CorrectionParameter, CheckResult, Correction, EvaluateResult, PlatformTypes
 )
 from cqedtoolbox.protocols.parameters import (
     Repetition,
@@ -29,6 +29,7 @@ from cqedtoolbox.protocols.parameters import (
 )
 from cqedtoolbox.measurement_lib.opx.advanced.qubit_tuneup import measure_t1
 from cqedtoolbox.measurement_lib.qick.single_transmon_v2 import T1Program
+from cqedtoolbox.readout.qubit_readout import rotate_complex_qubit_data
 
 
 logger = logging.getLogger(__name__)
@@ -227,23 +228,15 @@ class T1Operation(ProtocolOperation):
         self._register_check("quality_check", self._check_quality,
                              [self._increase_delay, self._increase_averaging])
 
-        self._register_success_update(self.t1, lambda: self._winner_fit.params["tau"].value)
-        self._register_success_update(self.delay, lambda: 10 * self._winner_fit.params["tau"].value)
+        self._register_success_update(self.t1, lambda: self.fit_result.params["tau"].value)
+        self._register_success_update(self.delay, lambda: 10 * self.fit_result.params["tau"].value)
 
         self.independents = {"delays": []}
         self.dependents = {"signal": []}
 
-        self.fit_result_re = None
-        self.fit_result_imag = None
-        self.fit_result_mag = None
-        self.snr_re = None
-        self.snr_imag = None
-        self.snr_mag = None
-        self._winner_fit = None
-        self._winner_snr = None
-        self._winner_key = None
-        self._winner_name = None
-        self._sorted_components = None
+        self.fit_result = None
+        self.residuals = None
+        self.snr = None
 
     def _measure_dummy(self) -> Path:
         logger.info("Starting dummy T1 measurement")
@@ -256,12 +249,10 @@ class T1Operation(ProtocolOperation):
         return loc
 
     def _load_data_dummy(self):
-        path = self.data_loc / "data.ddh5"
-        if not path.exists():
-            raise FileNotFoundError(f"File {path} does not exist")
-        data = datadict_from_hdf5(path)
-        self.independents["delays"] = data["delays"]["values"]
-        self.dependents["signal"] = data["signal"]["values"]
+        data = load_as_xr(self.data_loc)
+        rotated = rotate_complex_qubit_data(data)[0]
+        self.independents["delays"] = rotated["delays"].values
+        self.dependents["signal"] = rotated["signal"].values
 
     def _measure_qick(self) -> Path:
         logger.info("Starting qick T1 measurement")
@@ -278,178 +269,80 @@ class T1Operation(ProtocolOperation):
         return loc
 
     def _load_data_qick(self):
-        path = self.data_loc / "data.ddh5"
-        if not path.exists():
-            raise FileNotFoundError(f"File {path} does not exist")
-        data = datadict_from_hdf5(path)
-
-        self.independents["delays"] = data["t"]["values"]
-        self.dependents["signal"] = data["signal"]["values"]
+        data = load_as_xr(self.data_loc)
+        rotated = rotate_complex_qubit_data(data)[0]
+        self.independents["delays"] = rotated["t"].values
+        self.dependents["signal"] = rotated["signal"].values
 
     def _load_data_opx(self):
-        data = load_as_xr(self.data_loc).mean("repetition")
+        data = load_as_xr(self.data_loc)
+        if "repetition" in data.dims:
+            data = data.mean("repetition")
+        data, _ = rotate_complex_qubit_data(data)
         self.independents["delays"] = data["delay"].values
-        self.dependents["signal"] = data["signal_Re"].values + 1j * data["signal_Im"].values
+        self.dependents["signal"] = data["signal"].values
 
-    def _fit_exponential_components(self, delays, signal, fig_title="") -> tuple:
-        """
-        Fit real, imaginary, and magnitude components with ExponentialDecay fits.
-        Returns (fit_result_re, fit_result_imag, fit_result_mag, fig_re, fig_imag, fig_mag)
-        """
-        signal_re = signal.real
-        signal_imag = signal.imag
-        signal_mag = np.abs(signal)
+    def _fit_exponential(self, delays, signal, fig_title="") -> tuple:
+        fit = ExponentialDecay(delays, signal)
+        fit_result = fit.run(fit)
+        fit_curve = fit_result.eval()
+        residuals = signal - fit_curve
+        amp = fit_result.params["A"].value
+        noise = np.std(residuals)
+        snr = np.abs(amp / (4 * noise))
 
-        # Fit real part
-        fit_re = ExponentialDecay(delays, signal_re)
-        fit_result_re = fit_re.run(fit_re)
-        fit_curve_re = fit_result_re.eval()
-        residuals_re = signal_re - fit_curve_re
-        amp_re = fit_result_re.params["A"].value
-        noise_re = np.std(residuals_re)
-        snr_re = np.abs(amp_re / (4 * noise_re))
+        fig, ax = plt.subplots()
+        ax.set_title(fig_title)
+        if self.platform_type == PlatformTypes.OPX:
+            ax.set_xlabel("Delay (ns)")
+        else:
+            ax.set_xlabel("Delay (μs)")
+        ax.set_ylabel("Rotated Signal (A.U)")
+        ax.plot(delays, signal, label="Data")
+        ax.plot(delays, fit_curve, label="Fit")
+        ax.legend()
 
-        # Fit imaginary part
-        fit_imag = ExponentialDecay(delays, signal_imag)
-        fit_result_imag = fit_imag.run(fit_imag)
-        fit_curve_imag = fit_result_imag.eval()
-        residuals_imag = signal_imag - fit_curve_imag
-        amp_imag = fit_result_imag.params["A"].value
-        noise_imag = np.std(residuals_imag)
-        snr_imag = np.abs(amp_imag / (4 * noise_imag))
-
-        # Fit magnitude
-        fit_mag = ExponentialDecay(delays, signal_mag)
-        fit_result_mag = fit_mag.run(fit_mag)
-        fit_curve_mag = fit_result_mag.eval()
-        residuals_mag = signal_mag - fit_curve_mag
-        amp_mag = fit_result_mag.params["A"].value
-        noise_mag = np.std(residuals_mag)
-        snr_mag = np.abs(amp_mag / (4 * noise_mag))
-
-        # Create three separate figures
-        # Real plot
-        fig_re, ax_re = plt.subplots()
-        ax_re.set_title(f"{fig_title} - Real")
-        ax_re.set_xlabel("Delay (μs)")
-        ax_re.set_ylabel("Signal Real (A.U)")
-        ax_re.plot(delays, signal_re, label="Data")
-        ax_re.plot(delays, fit_curve_re, label="Fit")
-        ax_re.legend()
-
-        # Imaginary plot
-        fig_imag, ax_imag = plt.subplots()
-        ax_imag.set_title(f"{fig_title} - Imaginary")
-        ax_imag.set_xlabel("Delay (μs)")
-        ax_imag.set_ylabel("Signal Imaginary (A.U)")
-        ax_imag.plot(delays, signal_imag, label="Data")
-        ax_imag.plot(delays, fit_curve_imag, label="Fit")
-        ax_imag.legend()
-
-        # Magnitude plot
-        fig_mag, ax_mag = plt.subplots()
-        ax_mag.set_title(f"{fig_title} - Magnitude")
-        ax_mag.set_xlabel("Delay (μs)")
-        ax_mag.set_ylabel("Signal Magnitude (A.U)")
-        ax_mag.plot(delays, signal_mag, label="Data")
-        ax_mag.plot(delays, fit_curve_mag, label="Fit")
-        ax_mag.legend()
-
-        return (
-            (fit_result_re, residuals_re, snr_re),
-            (fit_result_imag, residuals_imag, snr_imag),
-            (fit_result_mag, residuals_mag, snr_mag),
-            fig_re,
-            fig_imag,
-            fig_mag
-        )
+        return fit_result, residuals, snr, fig
 
     def analyze(self):
         with DatasetAnalysis(self.data_loc, self.name) as ds:
-            result_re, result_imag, result_mag, fig_re, fig_imag, fig_mag = self._fit_exponential_components(
+            self.fit_result, self.residuals, self.snr, fig = self._fit_exponential(
                 self.independents["delays"],
                 self.dependents["signal"],
                 "T1 Measurement"
             )
 
-            self.fit_result_re, residuals_re, self.snr_re = result_re
-            self.fit_result_imag, residuals_imag, self.snr_imag = result_imag
-            self.fit_result_mag, residuals_mag, self.snr_mag = result_mag
-
             # Save all fit results
             ds.add(
-                fit_result_re=self.fit_result_re,
-                params_re=serialize_fit_params(self.fit_result_re.params),
-                snr_re=float(self.snr_re),
-                fit_result_imag=self.fit_result_imag,
-                params_imag=serialize_fit_params(self.fit_result_imag.params),
-                snr_imag=float(self.snr_imag),
-                fit_result_mag=self.fit_result_mag,
-                params_mag=serialize_fit_params(self.fit_result_mag.params),
-                snr_mag=float(self.snr_mag)
+                fit_result=self.fit_result,
+                params=serialize_fit_params(self.fit_result.params),
+                snr=float(self.snr)
             )
 
-            # Save all three figures separately
-            ds.add_figure(f"{self.name}_real", fig=fig_re)
-            image_path_re = ds._new_file_path(ds.savefolders[1], f"{self.name}_real", suffix="png")
-            self.figure_paths.append(image_path_re)
-
-            ds.add_figure(f"{self.name}_imag", fig=fig_imag)
-            image_path_imag = ds._new_file_path(ds.savefolders[1], f"{self.name}_imag", suffix="png")
-            self.figure_paths.append(image_path_imag)
-
-            ds.add_figure(f"{self.name}_mag", fig=fig_mag)
-            image_path_mag = ds._new_file_path(ds.savefolders[1], f"{self.name}_mag", suffix="png")
-            self.figure_paths.append(image_path_mag)
-
-            snr_dict = {
-                "Real":      (self.snr_re,   self.fit_result_re,   "re"),
-                "Imaginary": (self.snr_imag, self.fit_result_imag, "imag"),
-                "Magnitude": (self.snr_mag,  self.fit_result_mag,  "mag"),
-            }
-            self._sorted_components = sorted(snr_dict.items(), key=lambda x: x[1][0], reverse=True)
+            ds.add_figure(self.name, fig=fig)
+            image_path = ds._new_file_path(ds.savefolders[1], self.name, suffix="png")
+            self.figure_paths.append(image_path)
 
     def _check_quality(self) -> CheckResult:
         snr_min = self.snr_min_threshold()
-
-        valid = [
-            (name, snr, fit, key)
-            for name, (snr, fit, key) in self._sorted_components
-            if snr >= snr_min
-        ]
-
-        if valid:
-            self._winner_name, self._winner_snr, self._winner_fit, self._winner_key = valid[0]
-            max_error = self.max_fit_param_error()
-            bad_params = []
-            for pname, param in self._winner_fit.params.items():
-                if param.stderr is None:
-                    bad_params.append(f"{pname}(no stderr)")
-                elif param.value == 0 or abs(param.stderr / param.value) > max_error:
-                    pct = abs(param.stderr / param.value) * 100 if param.value != 0 else float("inf")
-                    bad_params.append(f"{pname}({pct:.0f}%)")
-            passed = len(bad_params) == 0
-            parts = [f"winner={self._winner_name}, SNR={self._winner_snr:.3f} (threshold={snr_min:.1f})"]
-            if bad_params:
-                parts.append(f"high-error params: {', '.join(bad_params)}")
-        else:
-            self._winner_name, (self._winner_snr, self._winner_fit, self._winner_key) = self._sorted_components[0]
-            passed = False
-            parts = [
-                f"no component with SNR >= {snr_min:.1f}",
-                f"best={self._winner_name}, SNR={self._winner_snr:.3f}",
-            ]
+        max_error = self.max_fit_param_error()
+        bad_params = []
+        for pname, param in self.fit_result.params.items():
+            if param.stderr is None:
+                bad_params.append(f"{pname}(no stderr)")
+            elif param.value == 0 or abs(param.stderr / param.value) > max_error:
+                pct = abs(param.stderr / param.value) * 100 if param.value != 0 else float("inf")
+                bad_params.append(f"{pname}({pct:.0f}%)")
+        passed = self.snr >= snr_min and len(bad_params) == 0
+        parts = [f"SNR={self.snr:.3f} (threshold={snr_min:.1f})"]
+        if bad_params:
+            parts.append(f"high-error params: {', '.join(bad_params)}")
 
         return CheckResult("quality_check", passed, "; ".join(parts))
 
     def correct(self, result: EvaluateResult) -> EvaluateResult:
-        # Pop all figures before super() auto-appends the last one
-        fig_re   = self.figure_paths.pop(0) if len(self.figure_paths) >= 3 else None
-        fig_imag = self.figure_paths.pop(0) if self.figure_paths else None
-        fig_mag  = self.figure_paths.pop(0) if self.figure_paths else None
-        self.figure_paths.clear()  # prevent auto-append
-
-        plot_map = {"re": fig_re, "imag": fig_imag, "mag": fig_mag}
+        figure = self.figure_paths[0] if self.figure_paths else None
+        self.figure_paths.clear()
 
         snr_min = self.snr_min_threshold()
         self.report_output.append(
@@ -458,15 +351,13 @@ class T1Operation(ProtocolOperation):
             f"Data Path: `{self.data_loc}`\n\n"
         )
 
-        for i, (comp_name, (comp_snr, comp_fit, comp_key)) in enumerate(self._sorted_components):
-            tag = "(SELECTED)" if i == 0 else "(NOT SELECTED)"
-            self.report_output.append(f"### **{comp_name} Component {tag}**\n")
-            if plot_map.get(comp_key):
-                self.report_output.append(plot_map[comp_key])
-            self.report_output.append(
-                f"SNR={comp_snr:.3f}\n\n"
-                f"**Fit Report:**\n```\n{str(comp_fit.lmfit_result.fit_report())}\n```\n\n"
-            )
+        self.report_output.append("### Rotated Signal Fit\n")
+        if figure:
+            self.report_output.append(figure)
+        self.report_output.append(
+            f"SNR={self.snr:.3f}\n\n"
+            f"**Fit Report:**\n```\n{str(self.fit_result.lmfit_result.fit_report())}\n```\n\n"
+        )
 
         result = super().correct(result)  # adds check table + success update lines
         return result

@@ -28,6 +28,7 @@ from cqedtoolbox.protocols.parameters import (
 )
 from cqedtoolbox.measurement_lib.opx.advanced.qubit_tuneup import measure_pi_spec
 from cqedtoolbox.measurement_lib.qick.single_transmon_v2 import PiSpecProgram
+from cqedtoolbox.readout.qubit_readout import rotate_complex_qubit_data
 
 
 logger = logging.getLogger(__name__)
@@ -166,22 +167,14 @@ class PiSpectroscopy(ProtocolOperation):
             self.repetitions, self.averaging_factor, self.max_averaging_increases
         )
         self._register_check("quality_check", self._check_quality, self._increase_averaging)
-        self._register_success_update(self.qubit_freq, lambda: self.winner_fit.params["x0"].value)
+        self._register_success_update(self.qubit_freq, lambda: self.fit_result.params["x0"].value)
 
         self.independents = {"frequencies": []}
         self.dependents = {"signal": []}
 
-        self.fit_result_re = None
-        self.fit_result_imag = None
-        self.fit_result_mag = None
-        self.snr_re = None
-        self.snr_imag = None
-        self.snr_mag = None
-        self.winner_name = None
-        self.winner_snr = None
-        self.winner_fit = None
-        self.winner_key = None
-        self.sorted_components = None
+        self.fit_result = None
+        self.residuals = None
+        self.snr = None
 
     def _measure_dummy(self) -> Path:
         logger.info("Starting dummy pi spectroscopy measurement")
@@ -198,12 +191,10 @@ class PiSpectroscopy(ProtocolOperation):
         return loc
 
     def _load_data_dummy(self):
-        path = self.data_loc / "data.ddh5"
-        if not path.exists():
-            raise FileNotFoundError(f"File {path} does not exist")
-        data = datadict_from_hdf5(path)
-        self.independents["frequencies"] = data["frequencies"]["values"]
-        self.dependents["signal"] = data["signal"]["values"]
+        data = load_as_xr(self.data_loc)
+        rotated = rotate_complex_qubit_data(data)[0]
+        self.independents["frequencies"] = rotated["frequencies"].values
+        self.dependents["signal"] = rotated["signal"].values
 
     def _measure_qick(self) -> Path:
         logger.info("Starting qick pi spectroscopy measurement")
@@ -222,145 +213,65 @@ class PiSpectroscopy(ProtocolOperation):
         return loc
 
     def _load_data_qick(self):
-        path = self.data_loc / "data.ddh5"
-        if not path.exists():
-            raise FileNotFoundError(f"File {path} does not exist")
-        data = datadict_from_hdf5(path)
-
-        self.independents["frequencies"] = data["freq"]["values"]
-        self.dependents["signal"] = data["signal"]["values"]
+        data = load_as_xr(self.data_loc)
+        rotated = rotate_complex_qubit_data(data)[0]
+        self.independents["frequencies"] = rotated["freq"].values
+        self.dependents["signal"] = rotated["signal"].values
 
     def _load_data_opx(self):
-        data = load_as_xr(self.data_loc).mean("repetition")
+        data = load_as_xr(self.data_loc)
+        if "repetition" in data.dims:
+            data = data.mean("repetition")
+        data, _ = rotate_complex_qubit_data(data)
         self.independents["frequencies"] = data["ssb_frequency"].values
-        self.dependents["signal"] = data["signal_Re"].values + 1j * data["signal_Im"].values
+        self.dependents["signal"] = data["signal"].values
 
-    def _fit_gaussian_components(self, frequencies, signal, fig_title="") -> tuple:
-        """
-        Fit real, imaginary, and magnitude components with Gaussian fits.
-        Returns (fit_result_re, fit_result_imag, fit_result_mag, fig_re, fig_imag, fig_mag)
-        """
-        signal_re = signal.real
-        signal_imag = signal.imag
-        signal_mag = np.abs(signal)
+    def _fit_gaussian(self, frequencies, signal, fig_title="") -> tuple:
+        fit = Gaussian(frequencies, signal)
+        fit_result = fit.run(fit)
+        fit_curve = fit_result.eval()
+        residuals = signal - fit_curve
+        amp = fit_result.params["A"].value
+        noise = np.std(residuals)
+        snr = np.abs(amp / (4 * noise))
 
-        # Fit real part
-        fit_re = Gaussian(frequencies, signal_re)
-        fit_result_re = fit_re.run(fit_re)
-        fit_curve_re = fit_result_re.eval()
-        residuals_re = signal_re - fit_curve_re
-        amp_re = fit_result_re.params["A"].value
-        noise_re = np.std(residuals_re)
-        snr_re = np.abs(amp_re / (4 * noise_re))
+        fig, ax = plt.subplots()
+        ax.set_title(fig_title)
+        ax.set_xlabel("Frequency (MHz)")
+        ax.set_ylabel("Rotated Signal (A.U)")
+        ax.plot(frequencies, signal, label="Data")
+        ax.plot(frequencies, fit_curve, label="Fit")
+        ax.legend()
 
-        # Fit imaginary part
-        fit_imag = Gaussian(frequencies, signal_imag)
-        fit_result_imag = fit_imag.run(fit_imag)
-        fit_curve_imag = fit_result_imag.eval()
-        residuals_imag = signal_imag - fit_curve_imag
-        amp_imag = fit_result_imag.params["A"].value
-        noise_imag = np.std(residuals_imag)
-        snr_imag = np.abs(amp_imag / (4 * noise_imag))
-
-        # Fit magnitude
-        fit_mag = Gaussian(frequencies, signal_mag)
-        fit_result_mag = fit_mag.run(fit_mag)
-        fit_curve_mag = fit_result_mag.eval()
-        residuals_mag = signal_mag - fit_curve_mag
-        amp_mag = fit_result_mag.params["A"].value
-        noise_mag = np.std(residuals_mag)
-        snr_mag = np.abs(amp_mag / (4 * noise_mag))
-
-        # Create three separate figures
-        # Real plot
-        fig_re, ax_re = plt.subplots()
-        ax_re.set_title(f"{fig_title} - Real")
-        ax_re.set_xlabel("Frequency (MHz)")
-        ax_re.set_ylabel("Signal Real (A.U)")
-        ax_re.plot(frequencies, signal_re, label="Data")
-        ax_re.plot(frequencies, fit_curve_re, label="Fit")
-        ax_re.legend()
-
-        # Imaginary plot
-        fig_imag, ax_imag = plt.subplots()
-        ax_imag.set_title(f"{fig_title} - Imaginary")
-        ax_imag.set_xlabel("Frequency (MHz)")
-        ax_imag.set_ylabel("Signal Imaginary (A.U)")
-        ax_imag.plot(frequencies, signal_imag, label="Data")
-        ax_imag.plot(frequencies, fit_curve_imag, label="Fit")
-        ax_imag.legend()
-
-        # Magnitude plot
-        fig_mag, ax_mag = plt.subplots()
-        ax_mag.set_title(f"{fig_title} - Magnitude")
-        ax_mag.set_xlabel("Frequency (MHz)")
-        ax_mag.set_ylabel("Signal Magnitude (A.U)")
-        ax_mag.plot(frequencies, signal_mag, label="Data")
-        ax_mag.plot(frequencies, fit_curve_mag, label="Fit")
-        ax_mag.legend()
-
-        return (
-            (fit_result_re, residuals_re, snr_re),
-            (fit_result_imag, residuals_imag, snr_imag),
-            (fit_result_mag, residuals_mag, snr_mag),
-            fig_re,
-            fig_imag,
-            fig_mag
-        )
+        return fit_result, residuals, snr, fig
 
     def analyze(self):
         with DatasetAnalysis(self.data_loc, self.name) as ds:
-            result_re, result_imag, result_mag, fig_re, fig_imag, fig_mag = self._fit_gaussian_components(
+            self.fit_result, self.residuals, self.snr, fig = self._fit_gaussian(
                 self.independents["frequencies"],
                 self.dependents["signal"],
                 "Pi Spectroscopy"
             )
 
-            self.fit_result_re, residuals_re, self.snr_re = result_re
-            self.fit_result_imag, residuals_imag, self.snr_imag = result_imag
-            self.fit_result_mag, residuals_mag, self.snr_mag = result_mag
-
             # Save all fit results
             ds.add(
-                fit_result_re=self.fit_result_re,
-                params_re=serialize_fit_params(self.fit_result_re.params),
-                snr_re=float(self.snr_re),
-                fit_result_imag=self.fit_result_imag,
-                params_imag=serialize_fit_params(self.fit_result_imag.params),
-                snr_imag=float(self.snr_imag),
-                fit_result_mag=self.fit_result_mag,
-                params_mag=serialize_fit_params(self.fit_result_mag.params),
-                snr_mag=float(self.snr_mag)
+                fit_result=self.fit_result,
+                params=serialize_fit_params(self.fit_result.params),
+                snr=float(self.snr)
             )
 
-            # Save all three figures separately
-            ds.add_figure(f"{self.name}_real", fig=fig_re)
-            image_path_re = ds._new_file_path(ds.savefolders[1], f"{self.name}_real", suffix="png")
-            self.figure_paths.append(image_path_re)
-
-            ds.add_figure(f"{self.name}_imag", fig=fig_imag)
-            image_path_imag = ds._new_file_path(ds.savefolders[1], f"{self.name}_imag", suffix="png")
-            self.figure_paths.append(image_path_imag)
-
-            ds.add_figure(f"{self.name}_mag", fig=fig_mag)
-            image_path_mag = ds._new_file_path(ds.savefolders[1], f"{self.name}_mag", suffix="png")
-            self.figure_paths.append(image_path_mag)
+            ds.add_figure(self.name, fig=fig)
+            image_path = ds._new_file_path(ds.savefolders[1], self.name, suffix="png")
+            self.figure_paths.append(image_path)
 
     def _check_quality(self) -> CheckResult:
-        snr_dict = {
-            "Real":      (self.snr_re,   self.fit_result_re,   "re"),
-            "Imaginary": (self.snr_imag, self.fit_result_imag, "imag"),
-            "Magnitude": (self.snr_mag,  self.fit_result_mag,  "mag"),
-        }
-        self.sorted_components = sorted(snr_dict.items(), key=lambda x: x[1][0], reverse=True)
-        self.winner_name, (self.winner_snr, self.winner_fit, self.winner_key) = self.sorted_components[0]
-
+        # TODO: make sure that the fit frequency is inside the swept range
         threshold = self.snr_threshold()
-        snr_passed = self.winner_snr >= threshold
+        snr_passed = self.snr >= threshold
 
         max_error = self.max_fit_param_error()
         bad_params = []
-        for pname, param in self.winner_fit.params.items():
+        for pname, param in self.fit_result.params.items():
             if param.stderr is None:
                 bad_params.append(f"{pname}(no stderr)")
             elif param.value != 0 and abs(param.stderr / param.value) > max_error:
@@ -368,20 +279,14 @@ class PiSpectroscopy(ProtocolOperation):
                 bad_params.append(f"{pname}({pct:.0f}%)")
 
         passed = snr_passed and len(bad_params) == 0
-        parts = [f"SNR={self.winner_snr:.3f} (threshold={threshold:.3f}, component={self.winner_name})"]
+        parts = [f"SNR={self.snr:.3f} (threshold={threshold:.3f})"]
         if bad_params:
             parts.append(f"high-error params: {', '.join(bad_params)}")
         return CheckResult("quality_check", passed, "; ".join(parts))
 
     def correct(self, result: EvaluateResult) -> EvaluateResult:
-        # Pull all three figures before super() can auto-append the last one.
-        # figure_paths order after analyze(): [0]=real, [1]=imag, [2]=mag
-        plot_map = {}
-        if len(self.figure_paths) >= 3:
-            plot_map["re"]   = self.figure_paths[0].resolve()
-            plot_map["imag"] = self.figure_paths[1].resolve()
-            plot_map["mag"]  = self.figure_paths[2].resolve()
-        self.figure_paths.clear()  # prevent auto-append
+        figure = self.figure_paths[0].resolve() if self.figure_paths else None
+        self.figure_paths.clear()
 
         header = (f"## Pi Spectroscopy\n"
                   f"Frequencies: {self.start_freq():.3f}–{self.end_freq():.3f} MHz\n"
@@ -390,42 +295,12 @@ class PiSpectroscopy(ProtocolOperation):
 
         result = super().correct(result)  # adds check table; no auto-figure since list is empty
 
-        if self.sorted_components:
-            winner_name, (winner_snr, winner_fit, winner_key) = self.sorted_components[0]
-            winner_report = f"**Fit Report:**\n```\n{str(winner_fit.lmfit_result.fit_report())}\n```\n\n"
-
-            if result.status == OperationStatus.SUCCESS:
-                self.report_output.extend([
-                    f"### **{winner_name} Component (SELECTED)**\n"
-                    f"Fit was **SUCCESSFUL** with {winner_name} SNR of {winner_snr:.3f}\n"
-                    f"This component was selected because it has the highest SNR.\n\n",
-                    plot_map.get(winner_key, ""),
-                    winner_report,
-                ])
-                for comp_name, (comp_snr, comp_fit, comp_key) in self.sorted_components[1:]:
-                    threshold = self.snr_threshold()
-                    if comp_snr >= threshold:
-                        reason = f"SNR of {comp_snr:.3f} is above threshold but lower than {winner_name} (SNR={winner_snr:.3f})"
-                    else:
-                        reason = f"SNR of {comp_snr:.3f} is below threshold of {threshold:.3f}"
-                    self.report_output.extend([
-                        f"### **{comp_name} Component (NOT SELECTED)**\n",
-                        plot_map.get(comp_key, ""),
-                        f"Not used: {reason}\n\n**Fit Report:**\n```\n{str(comp_fit.lmfit_result.fit_report())}\n```\n\n",
-                    ])
-            else:
-                self.report_output.extend([
-                    f"### **{winner_name} Component (Highest SNR)**\n"
-                    f"Fit was **UNSUCCESSFUL** with {winner_name} SNR of {winner_snr:.3f}\n"
-                    f"NO value has been changed.\n\n",
-                    plot_map.get(winner_key, ""),
-                    winner_report,
-                ])
-                for comp_name, (comp_snr, comp_fit, comp_key) in self.sorted_components[1:]:
-                    self.report_output.extend([
-                        f"### **{comp_name} Component**\n",
-                        plot_map.get(comp_key, ""),
-                        f"SNR of {comp_snr:.3f}\n\n**Fit Report:**\n```\n{str(comp_fit.lmfit_result.fit_report())}\n```\n\n",
-                    ])
+        status_line = "SUCCESSFUL" if result.status == OperationStatus.SUCCESS else "UNSUCCESSFUL"
+        self.report_output.extend([
+            f"### Rotated Signal Fit\n"
+            f"Fit was **{status_line}** with SNR of {self.snr:.3f}\n\n",
+            figure or "",
+            f"**Fit Report:**\n```\n{str(self.fit_result.lmfit_result.fit_report())}\n```\n\n",
+        ])
 
         return result

@@ -7,7 +7,6 @@ import matplotlib.pyplot as plt
 
 plt.switch_backend("agg")
 
-
 from labcore.analysis import DatasetAnalysis
 from labcore.measurement.storage import run_and_save_sweep
 from labcore.data.datadict_storage import datadict_from_hdf5, load_as_xr
@@ -15,7 +14,8 @@ from labcore.measurement import sweep_parameter
 from labcore.measurement.record import recording, dep, indep
 
 from labcore.protocols.base import (ProtocolOperation, OperationStatus, serialize_fit_params,
-                                    CorrectionParameter, CheckResult, Correction, EvaluateResult)
+                                    CorrectionParameter, CheckResult, Correction, EvaluateResult, PlatformTypes)
+from cqedtoolbox.protocols.operations import ResonatorGeometry
 from cqedtoolbox.protocols.parameters import (
     Repetition,
     StartReadoutFrequency,
@@ -24,7 +24,10 @@ from cqedtoolbox.protocols.parameters import (
     ReadoutLength, StartReadoutGain, EndReadoutGain, ResonatorSpecSteps, ResonatorSpecVsGainSteps,
     nestedAttributeFromString,
 )
-from cqedtoolbox.protocols.operations.single_qubit.res_spec import ResonatorSpectroscopy, SyntheticHangerResonatorData
+from cqedtoolbox.protocols.operations.single_qubit.res_spec import (
+    ResonatorSpectroscopy,
+    SyntheticHangerResonatorData,
+)
 from cqedtoolbox.measurement_lib.opx.advanced.qubit_tuneup import measure_pulse_resonator_spec_vs_readout_amp
 from cqedtoolbox.measurement_lib.qick.single_transmon_v2 import FreqGainSweepProgram
 
@@ -156,9 +159,21 @@ class ResonatorSpectroscopyVsGain(ProtocolOperation):
 
     _SIM_N_GAIN_STEPS = 11
 
-    def __init__(self, params):
+    def __init__(self, params, geometry: ResonatorGeometry | str):
         super().__init__()
         self.params = params
+
+        if isinstance(geometry, str):
+            try:
+                geometry = ResonatorGeometry(geometry.lower())
+            except ValueError as err:
+                valid = ", ".join(g.value for g in ResonatorGeometry)
+                raise ValueError(
+                    f"Unsupported resonator geometry '{geometry}'. Expected one of: {valid}"
+                ) from err
+
+        self.geometry = geometry
+        self._fit_cls = geometry.fit_cls
 
         self._register_inputs(
             repetitions=Repetition(params),
@@ -203,6 +218,35 @@ class ResonatorSpectroscopyVsGain(ProtocolOperation):
         self.deviations = []
         self.fit_results = []
         self.snr_values = []
+        self.trace_valid = []
+        self.trace_invalid_reasons = []
+
+    def _trace_in_range(self, freqs, fit_result) -> bool:
+        f0 = fit_result.params["f_0"].value
+        freqs = np.asarray(freqs, dtype=float)
+        return float(np.min(freqs)) <= f0 <= float(np.max(freqs))
+
+    def _trace_invalid_reason(self, freqs, fit_result, snr) -> str | None:
+        if not self._trace_in_range(freqs, fit_result):
+            f0 = fit_result.params["f_0"].value
+            fmin = float(np.min(freqs))
+            fmax = float(np.max(freqs))
+            return f"f_0={f0:.6g} outside sweep=[{fmin:.6g}, {fmax:.6g}]"
+
+        if snr < self.snr_threshold():
+            return f"SNR={snr:.3f} < {self.snr_threshold():.3f}"
+
+        max_error = self.max_fit_param_error()
+        for pname, param in fit_result.params.items():
+            if pname in ["transmission_slope", "phase_slope", "phase_offset"]:
+                continue
+            if param.stderr is None:
+                return f"{pname}: no stderr"
+            if param.value == 0 or abs(param.stderr / param.value) > max_error:
+                pct = abs(param.stderr / param.value) * 100 if param.value != 0 else float("inf")
+                return f"{pname}: {pct:.0f}% error"
+
+        return None
 
     def _measure_qick(self) -> Path:
         logger.info("Starting qick resonator spectroscopy vs gain measurement")
@@ -341,18 +385,27 @@ class ResonatorSpectroscopyVsGain(ProtocolOperation):
             self.figure_paths.append(image_path)
 
             # Analyze each gain trace individually
-            gains = self.independents["gains"][0]
+            gains = self.independents["gains"]
             res_f_arr = []
+            self.fit_results = []
+            self.snr_values = []
+            self.trace_valid = []
+            self.trace_invalid_reasons = []
 
             for i, g in enumerate(gains):
-                trace_signal = self.dependents["signal"].T[i]  # Transpose to achieve gain as axis 0
-                freqs = self.independents["frequencies"].T[i]
-
                 folder_name = f"resonator_spec_vs_gain_i={i}_g={g}"
+
+                # FIXME: is this the correct pattern for qick?
+                if self.platform_type == PlatformTypes.OPX:
+                    trace_signal = self.dependents["signal"][i]
+                    freqs = self.independents["frequencies"]
+                else:
+                    trace_signal = self.dependents["signal"].T[i]  # Transpose to achieve gain as axis 0
+                    freqs = self.independents["frequencies"].T[i]
 
                 # Use the static method from ResonatorSpectroscopy
                 ret = ResonatorSpectroscopy.add_mag_and_unwind_and_fit(
-                    freqs, trace_signal, f"Gain = {g}"
+                    freqs, trace_signal, self.platform_type, self._fit_cls, f"Gain = {g}"
                 )
 
                 _excluded = {"transmission_slope", "phase_slope", "phase_offset"}
@@ -366,12 +419,15 @@ class ResonatorSpectroscopyVsGain(ProtocolOperation):
                         f"{_null_stderr_params} — re-fitting"
                     )
                     ret = ResonatorSpectroscopy.add_mag_and_unwind_and_fit(
-                        freqs, trace_signal, f"Gain = {g}"
+                        freqs, trace_signal, self.platform_type, self._fit_cls, f"Gain = {g}"
                     )
 
                 self.fit_results.append(ret.fit_result)
                 self.snr_values.append(ret.snr)
                 res_f_arr.append(ret.fit_result.params["f_0"].value)
+                invalid_reason = self._trace_invalid_reason(freqs, ret.fit_result, ret.snr)
+                self.trace_valid.append(invalid_reason is None)
+                self.trace_invalid_reasons.append(invalid_reason)
 
                 # Save individual trace analysis
                 with DatasetAnalysis(self.data_loc, folder_name) as trace_ds:
@@ -388,21 +444,7 @@ class ResonatorSpectroscopyVsGain(ProtocolOperation):
 
             self.resonance_frequencies = res_f_arr
 
-            # Find optimal gain: highest-SNR trace that passes the full quality check
-            snr_threshold = self.snr_threshold()
-            max_error = self.max_fit_param_error()
-            passing_indices = []
-            for i, (snr, fit) in enumerate(zip(self.snr_values, self.fit_results)):
-                if snr < snr_threshold:
-                    continue
-                bad_fit = any(
-                    (param.stderr is None or param.value == 0 or
-                     abs(param.stderr / param.value) > max_error)
-                    for pname, param in fit.params.items()
-                    if pname not in ["transmission_slope", "phase_slope", "phase_offset"]
-                )
-                if not bad_fit:
-                    passing_indices.append(i)
+            passing_indices = [i for i, valid in enumerate(self.trace_valid) if valid]
 
             if passing_indices:
                 best_idx = max(passing_indices, key=lambda i: self.snr_values[i])
@@ -448,19 +490,8 @@ class ResonatorSpectroscopyVsGain(ProtocolOperation):
 
         failures = []
         for i in range(n_low):
-            snr = self.snr_values[i]
-            fit = self.fit_results[i]
-            if snr < threshold:
-                failures.append(f"trace {i}: SNR={snr:.3f} < {threshold:.3f}")
-                continue
-            for pname, param in fit.params.items():
-                if pname in ["transmission_slope", "phase_slope", "phase_offset"]:
-                    continue
-                if param.stderr is None:
-                    failures.append(f"trace {i}/{pname}: no stderr")
-                elif param.value == 0 or abs(param.stderr / param.value) > max_error:
-                    pct = abs(param.stderr / param.value) * 100 if param.value != 0 else float("inf")
-                    failures.append(f"trace {i}/{pname}: {pct:.0f}%")
+            if not self.trace_valid[i]:
+                failures.append(f"trace {i}: {self.trace_invalid_reasons[i]}")
 
         passed = len(failures) == 0
         desc = (f"first {n_low} traces pass quality check" if passed
@@ -468,12 +499,21 @@ class ResonatorSpectroscopyVsGain(ProtocolOperation):
         return CheckResult("low_gain_quality_check", passed, desc)
 
     def _check_high_snr(self) -> CheckResult:
-        """At least one trace must exceed the high SNR threshold."""
+        """At least one valid trace must exceed the high SNR threshold."""
         threshold = self.high_snr_threshold()
-        best = max(self.snr_values)
+        valid_indices = [i for i, valid in enumerate(self.trace_valid) if valid]
+        if not valid_indices:
+            return CheckResult(
+                "high_snr_check",
+                False,
+                "no valid traces remain after fit-range and fit-quality filtering",
+            )
+
+        best_idx = max(valid_indices, key=lambda i: self.snr_values[i])
+        best = self.snr_values[best_idx]
         passed = best >= threshold
-        desc = (f"best SNR={best:.3f} ≥ {threshold:.3f}" if passed
-                else f"best SNR={best:.3f} < {threshold:.3f} — no trace meets high-SNR threshold")
+        desc = (f"best valid trace={best_idx}, SNR={best:.3f} ≥ {threshold:.3f}" if passed
+                else f"best valid trace={best_idx}, SNR={best:.3f} < {threshold:.3f}")
         return CheckResult("high_snr_check", passed, desc)
 
     def correct(self, result: EvaluateResult) -> EvaluateResult:
@@ -499,13 +539,15 @@ class ResonatorSpectroscopyVsGain(ProtocolOperation):
         result = super().correct(result)  # check table + success update (writes readout_gain)
 
         if result.status == OperationStatus.SUCCESS:
-            gains = self.independents["gains"][0]
+            gains = self.independents["gains"]
             self.report_output.append("\n### Individual Gain Traces\n")
             for i, (fig_path, g) in enumerate(zip(trace_figures, gains)):
+                validity = "valid" if self.trace_valid[i] else f"invalid ({self.trace_invalid_reasons[i]})"
                 self.report_output.extend([
                     f"\n**Trace {i}: Gain = {g:.3f}**\n"
                     f"- SNR: {self.snr_values[i]:.3f}\n"
-                    f"- f_0: {self.resonance_frequencies[i]:.3f} MHz\n",
+                    f"- f_0: {self.resonance_frequencies[i]:.3f} MHz\n"
+                    f"- Status: {validity}\n",
                     fig_path,
                 ])
 

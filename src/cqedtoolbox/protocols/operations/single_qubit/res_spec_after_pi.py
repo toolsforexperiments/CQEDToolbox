@@ -15,6 +15,7 @@ from labcore.data.datadict_storage import datadict_from_hdf5, load_as_xr
 
 from labcore.protocols.base import (ProtocolOperation, OperationStatus, serialize_fit_params,
                                     CorrectionParameter, CheckResult, EvaluateResult)
+from cqedtoolbox.protocols.operations import ResonatorGeometry
 from cqedtoolbox.protocols.parameters import (
     Repetition,
     ResonatorSpecSteps,
@@ -28,8 +29,10 @@ from cqedtoolbox.protocols.parameters import (
 from cqedtoolbox.measurement_lib.opx.advanced.qubit_tuneup import measure_pulse_resonator_spec_after_pi_pulse
 from cqedtoolbox.measurement_lib.qick.single_transmon_v2 import FreqSweepProgram, ResProbeProgram
 
-from cqedtoolbox.fitfuncs.resonators import HangerResponseBruno
-from cqedtoolbox.protocols.operations.single_qubit.res_spec import SyntheticHangerResonatorData
+from cqedtoolbox.protocols.operations.single_qubit.res_spec import (
+    ResonatorSpectroscopy,
+    SyntheticHangerResonatorData,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -92,10 +95,21 @@ class DetuningThreshold(CorrectionParameter):
 
 
 class ResonatorSpectroscopyAfterPi(ProtocolOperation):
-
-    def __init__(self, params):
+    def __init__(self, params, geometry: ResonatorGeometry | str):
         super().__init__()
         self.params = params
+
+        if isinstance(geometry, str):
+            try:
+                geometry = ResonatorGeometry(geometry.lower())
+            except ValueError as err:
+                valid = ", ".join(g.value for g in ResonatorGeometry)
+                raise ValueError(
+                    f"Unsupported resonator geometry '{geometry}'. Expected one of: {valid}"
+                ) from err
+
+        self.geometry = geometry
+        self._fit_cls = geometry.fit_cls
 
         self._register_inputs(
             repetitions=Repetition(params),
@@ -117,6 +131,8 @@ class ResonatorSpectroscopyAfterPi(ProtocolOperation):
 
         self._register_check("quality_check_before", self._check_quality_before, None)
         self._register_check("quality_check_after", self._check_quality_after, None)
+        self._register_check("fit_in_range_before", self._check_fit_in_range_before, None)
+        self._register_check("fit_in_range_after", self._check_fit_in_range_after, None)
         self._register_check("detuning_check", self._check_detuning, None)
         self._register_success_update(self.detuning, lambda: self.chi)
 
@@ -215,34 +231,6 @@ class ResonatorSpectroscopyAfterPi(ProtocolOperation):
         logger.info("Measurement complete")
         return loc
 
-    def _add_mag_and_unwind_and_fit(self, frequencies, signal_raw, fig_title="") -> tuple:
-        """Unwind phase, calculate magnitude, and fit with hanger response"""
-        phase_unwrap = np.unwrap(np.angle(signal_raw))
-        phase_slope = np.polyfit(frequencies, phase_unwrap, 1)[0]
-
-        signal_unwind = signal_raw * np.exp(-1j * frequencies * phase_slope)
-        magnitude = np.abs(signal_raw)
-        phase = np.arctan2(signal_unwind.imag, signal_unwind.real)
-
-        fit = HangerResponseBruno(frequencies, signal_unwind)
-        fit_result = fit.run(fit)
-        fit_curve = fit_result.eval()
-        residuals = signal_unwind - fit_curve
-
-        amp = fit_result.params["A"].value
-        noise = np.std(residuals)
-        snr = np.abs(amp / (4 * noise))
-
-        fig, ax = plt.subplots()
-        ax.set_title(fig_title)
-        ax.set_xlabel("Frequency (MHz)")
-        ax.set_ylabel("Magnitude Signal (A.U)")
-        ax.plot(frequencies, magnitude, label="Data")
-        ax.plot(frequencies, np.abs(fit_curve), label="Fit")
-        ax.legend()
-
-        return signal_unwind, magnitude, phase, fit_result, residuals, snr, fig
-
     def _load_data_qick(self):
         # Load before data
         path_before = self.data_loc_before / "data.ddh5"
@@ -278,48 +266,56 @@ class ResonatorSpectroscopyAfterPi(ProtocolOperation):
     def analyze(self):
         # Analyze before measurement
         with DatasetAnalysis(self.data_loc_before, f"{self.name}_before") as ds:
-            ret_before = self._add_mag_and_unwind_and_fit(
+            ret_before = ResonatorSpectroscopy.add_mag_and_unwind_and_fit(
                 self.independents_before["frequencies"],
                 self.dependents_before["signal"],
+                self.platform_type,
+                self._fit_cls,
                 "Resonator Spectroscopy Before Pi"
             )
 
-            (self.unwind_signal_before, self.magnitude_before, phase_before,
-             self.fit_result_before, residuals_before, self.snr_before, fig_before) = ret_before
+            self.unwind_signal_before = ret_before.signal_unwind
+            self.magnitude_before = ret_before.magnitude
+            self.fit_result_before = ret_before.fit_result
+            self.snr_before = ret_before.snr
 
             self.f0_before = self.fit_result_before.params["f_0"].value
 
             ds.add(
-                fit_curve=self.fit_result_before.eval(),
+                fit_curve=ret_before.fit_curve,
                 fit_result=self.fit_result_before,
                 params=serialize_fit_params(self.fit_result_before.params),
                 snr=float(self.snr_before)
             )
-            ds.add_figure(f"{self.name}_before", fig=fig_before)
+            ds.add_figure(f"{self.name}_before", fig=ret_before.fig)
 
             image_path_before = ds._new_file_path(ds.savefolders[1], f"{self.name}_before", suffix="png")
             self.figure_paths.append(image_path_before)
 
         # Analyze after measurement
         with DatasetAnalysis(self.data_loc_after, f"{self.name}_after") as ds:
-            ret_after = self._add_mag_and_unwind_and_fit(
+            ret_after = ResonatorSpectroscopy.add_mag_and_unwind_and_fit(
                 self.independents_after["frequencies"],
                 self.dependents_after["signal"],
+                self.platform_type,
+                self._fit_cls,
                 "Resonator Spectroscopy After Pi"
             )
 
-            (self.unwind_signal_after, self.magnitude_after, phase_after,
-             self.fit_result_after, residuals_after, self.snr_after, fig_after) = ret_after
+            self.unwind_signal_after = ret_after.signal_unwind
+            self.magnitude_after = ret_after.magnitude
+            self.fit_result_after = ret_after.fit_result
+            self.snr_after = ret_after.snr
 
             self.f0_after = self.fit_result_after.params["f_0"].value
 
             ds.add(
-                fit_curve=self.fit_result_after.eval(),
+                fit_curve=ret_after.fit_curve,
                 fit_result=self.fit_result_after,
                 params=serialize_fit_params(self.fit_result_after.params),
                 snr=float(self.snr_after)
             )
-            ds.add_figure(f"{self.name}_after", fig=fig_after)
+            ds.add_figure(f"{self.name}_after", fig=ret_after.fig)
 
             image_path_after = ds._new_file_path(ds.savefolders[1], f"{self.name}_after", suffix="png")
             self.figure_paths.append(image_path_after)
@@ -392,6 +388,28 @@ class ResonatorSpectroscopyAfterPi(ProtocolOperation):
     def _check_quality_after(self) -> CheckResult:
         return self._check_fit_quality(self.snr_after, self.fit_result_after, "quality_check_after")
 
+    def _check_fit_in_range(self, freqs, fit_result, check_name) -> CheckResult:
+        freqs = np.asarray(freqs, dtype=float)
+        f0 = fit_result.params["f_0"].value
+        fmin = float(np.min(freqs))
+        fmax = float(np.max(freqs))
+        passed = fmin <= f0 <= fmax
+        return CheckResult(check_name, passed, f"f_0={f0:.6g}, sweep=[{fmin:.6g}, {fmax:.6g}]")
+
+    def _check_fit_in_range_before(self) -> CheckResult:
+        return self._check_fit_in_range(
+            self.independents_before["frequencies"],
+            self.fit_result_before,
+            "fit_in_range_before",
+        )
+
+    def _check_fit_in_range_after(self) -> CheckResult:
+        return self._check_fit_in_range(
+            self.independents_after["frequencies"],
+            self.fit_result_after,
+            "fit_in_range_after",
+        )
+
     def _check_detuning(self) -> CheckResult:
         threshold = self.detuning_threshold()
         passed = abs(self.chi) >= threshold
@@ -416,7 +434,8 @@ class ResonatorSpectroscopyAfterPi(ProtocolOperation):
         self.report_output.extend([header, plot_combined])
 
         result = super().correct(result)  # adds check table; no auto-figure since list is empty
-
+        
+        # FIXME: units for qick and OPX need to be reconciled here
         self.report_output.append(
             f"**Detuning (χ): {self.chi:.3f} MHz** "
             f"(f_0 before: {self.f0_before:.3f} MHz, f_0 after: {self.f0_after:.3f} MHz)\n\n"

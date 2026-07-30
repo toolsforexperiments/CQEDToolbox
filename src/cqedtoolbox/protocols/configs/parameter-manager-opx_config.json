@@ -35,6 +35,10 @@
     "unit": "",
     "value": null
   },
+  "parameter_manager.q01.chi": {
+    "unit": "Hz",
+    "value": 1e6
+  },
   "parameter_manager.q01.IF": {
     "unit": "Hz",
     "value": 124085680.0
@@ -430,10 +434,6 @@
   "parameter_manager.corrections.t2e.max_fit_param_error": {
     "unit": "",
     "value": 0.75
-  },
-  "parameter_manager.corrections.t2e.max_echos": {
-    "unit": "",
-    "value": 3
   },
   "parameter_manager.corrections.t2e.averaging_factor": {
     "unit": "",

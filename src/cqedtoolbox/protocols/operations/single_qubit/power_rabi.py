@@ -27,6 +27,7 @@ from cqedtoolbox.protocols.parameters import (
 )
 from cqedtoolbox.measurement_lib.opx.advanced.qubit_tuneup import measure_power_rabi
 from cqedtoolbox.measurement_lib.qick.single_transmon_v2 import AmplitudeRabiProgram
+from cqedtoolbox.readout.qubit_readout import rotate_complex_qubit_data
 
 
 logger = logging.getLogger(__name__)
@@ -362,23 +363,15 @@ class PowerRabi(ProtocolOperation):
 
         self._register_success_update(
             self.qubit_gain,
-            lambda: 1 / (2 * self._winner_fit.params["f"].value),
+            lambda: 1 / (2 * self.fit_result.params["f"].value),
         )
 
         self.independents = {"gains": []}
         self.dependents = {"signal": []}
 
-        self.fit_result_re = None
-        self.fit_result_imag = None
-        self.fit_result_mag = None
-        self.snr_re = None
-        self.snr_imag = None
-        self.snr_mag = None
-        self._winner_fit = None
-        self._winner_snr = None
-        self._winner_key = None
-        self._winner_name = None
-        self._sorted_components = None
+        self.fit_result = None
+        self.residuals = None
+        self.snr = None
 
     def _measure_qick(self) -> Path:
         logger.info("Starting qick power rabi measurement")
@@ -411,151 +404,70 @@ class PowerRabi(ProtocolOperation):
         return loc
 
     def _load_data_qick(self):
-        path = self.data_loc / "data.ddh5"
-        if not path.exists():
-            raise FileNotFoundError(f"File {path} does not exist")
-        data = datadict_from_hdf5(path)
-
-        self.independents["gains"] = data["gain"]["values"]
-        self.dependents["signal"] = data["signal"]["values"]
+        data = load_as_xr(self.data_loc)
+        rotated = rotate_complex_qubit_data(data)[0]
+        self.independents["gains"] = rotated["gain"].values
+        self.dependents["signal"] = rotated["signal"].values
 
     def _load_data_opx(self):
-        data = load_as_xr(self.data_loc).mean("repetition")
+        data = load_as_xr(self.data_loc)
+        if "repetition" in data.dims:
+            data = data.mean("repetition")
+        data, _ = rotate_complex_qubit_data(data)
         self.independents["gains"] = data["amplitude"].values
-        self.dependents["signal"] = data["signal_Re"].values + 1j * data["signal_Im"].values
+        self.dependents["signal"] = data["signal"].values
 
     def _load_data_dummy(self):
-        path = self.data_loc / "data.ddh5"
-        if not path.exists():
-            raise FileNotFoundError(f"File {path} does not exist")
-        data = datadict_from_hdf5(path)
+        data = load_as_xr(self.data_loc)
+        rotated = rotate_complex_qubit_data(data)[0]
+        self.independents["gains"] = rotated["gains"].values
+        self.dependents["signal"] = rotated["signal"].values
 
-        self.independents["gains"] = data["gains"]["values"]
-        self.dependents["signal"] = data["signal"]["values"]
+    def _fit_cosine(self, gains, signal, fig_title="") -> tuple:
+        fit = Cosine(gains, signal)
+        fit_result = fit.run(fit)
+        fit_curve = fit_result.eval()
+        residuals = signal - fit_curve
+        amp = fit_result.params["A"].value
+        noise = np.std(residuals)
+        snr = np.abs(amp / (4 * noise))
 
-    def _fit_cosine_components(self, gains, signal, fig_title="") -> tuple:
-        """
-        Fit real, imaginary, and magnitude components with Cosine fits.
-        Returns (fit_result_re, fit_result_imag, fit_result_mag, fig_re, fig_imag, fig_mag)
-        """
-        signal_re = signal.real
-        signal_imag = signal.imag
-        signal_mag = np.abs(signal)
+        fig, ax = plt.subplots()
+        ax.set_title(fig_title)
+        ax.set_xlabel("Gain (A.U)")
+        ax.set_ylabel("Rotated Signal (A.U)")
+        ax.plot(gains, signal, label="Data")
+        ax.plot(gains, fit_curve, label="Fit")
+        ax.legend()
 
-        # Fit real part
-        fit_re = Cosine(gains, signal_re)
-        fit_result_re = fit_re.run(fit_re)
-        fit_curve_re = fit_result_re.eval()
-        residuals_re = signal_re - fit_curve_re
-        amp_re = fit_result_re.params["A"].value
-        noise_re = np.std(residuals_re)
-        snr_re = np.abs(amp_re / (4 * noise_re))
-
-        # Fit imaginary part
-        fit_imag = Cosine(gains, signal_imag)
-        fit_result_imag = fit_imag.run(fit_imag)
-        fit_curve_imag = fit_result_imag.eval()
-        residuals_imag = signal_imag - fit_curve_imag
-        amp_imag = fit_result_imag.params["A"].value
-        noise_imag = np.std(residuals_imag)
-        snr_imag = np.abs(amp_imag / (4 * noise_imag))
-
-        # Fit magnitude
-        fit_mag = Cosine(gains, signal_mag)
-        fit_result_mag = fit_mag.run(fit_mag)
-        fit_curve_mag = fit_result_mag.eval()
-        residuals_mag = signal_mag - fit_curve_mag
-        amp_mag = fit_result_mag.params["A"].value
-        noise_mag = np.std(residuals_mag)
-        snr_mag = np.abs(amp_mag / (4 * noise_mag))
-
-        # Create three separate figures
-        fig_re, ax_re = plt.subplots()
-        ax_re.set_title(f"{fig_title} - Real")
-        ax_re.set_xlabel("Gain (A.U)")
-        ax_re.set_ylabel("Signal Real (A.U)")
-        ax_re.plot(gains, signal_re, label="Data")
-        ax_re.plot(gains, fit_curve_re, label="Fit")
-        ax_re.legend()
-
-        fig_imag, ax_imag = plt.subplots()
-        ax_imag.set_title(f"{fig_title} - Imaginary")
-        ax_imag.set_xlabel("Gain (A.U)")
-        ax_imag.set_ylabel("Signal Imaginary (A.U)")
-        ax_imag.plot(gains, signal_imag, label="Data")
-        ax_imag.plot(gains, fit_curve_imag, label="Fit")
-        ax_imag.legend()
-
-        fig_mag, ax_mag = plt.subplots()
-        ax_mag.set_title(f"{fig_title} - Magnitude")
-        ax_mag.set_xlabel("Gain (A.U)")
-        ax_mag.set_ylabel("Signal Magnitude (A.U)")
-        ax_mag.plot(gains, signal_mag, label="Data")
-        ax_mag.plot(gains, fit_curve_mag, label="Fit")
-        ax_mag.legend()
-
-        return (
-            (fit_result_re, residuals_re, snr_re),
-            (fit_result_imag, residuals_imag, snr_imag),
-            (fit_result_mag, residuals_mag, snr_mag),
-            fig_re,
-            fig_imag,
-            fig_mag
-        )
+        return fit_result, residuals, snr, fig
 
     def analyze(self):
         with DatasetAnalysis(self.data_loc, self.name) as ds:
-            result_re, result_imag, result_mag, fig_re, fig_imag, fig_mag = self._fit_cosine_components(
+            self.fit_result, self.residuals, self.snr, fig = self._fit_cosine(
                 self.independents["gains"],
                 self.dependents["signal"],
                 "Power Rabi"
             )
 
-            self.fit_result_re, residuals_re, self.snr_re = result_re
-            self.fit_result_imag, residuals_imag, self.snr_imag = result_imag
-            self.fit_result_mag, residuals_mag, self.snr_mag = result_mag
-
-            # Determine winner (highest SNR) for check and success update
-            snr_dict = {
-                "Real":      (self.snr_re,   self.fit_result_re,   "re"),
-                "Imaginary": (self.snr_imag, self.fit_result_imag, "imag"),
-                "Magnitude": (self.snr_mag,  self.fit_result_mag,  "mag"),
-            }
-            self._sorted_components = sorted(snr_dict.items(), key=lambda x: x[1][0], reverse=True)
-            self._winner_name, (self._winner_snr, self._winner_fit, self._winner_key) = self._sorted_components[0]
-
             # Save all fit results
             ds.add(
-                fit_result_re=self.fit_result_re,
-                params_re=serialize_fit_params(self.fit_result_re.params),
-                snr_re=float(self.snr_re),
-                fit_result_imag=self.fit_result_imag,
-                params_imag=serialize_fit_params(self.fit_result_imag.params),
-                snr_imag=float(self.snr_imag),
-                fit_result_mag=self.fit_result_mag,
-                params_mag=serialize_fit_params(self.fit_result_mag.params),
-                snr_mag=float(self.snr_mag)
+                fit_result=self.fit_result,
+                params=serialize_fit_params(self.fit_result.params),
+                snr=float(self.snr)
             )
 
-            ds.add_figure(f"{self.name}_real", fig=fig_re)
-            image_path_re = ds._new_file_path(ds.savefolders[1], f"{self.name}_real", suffix="png")
-            self.figure_paths.append(image_path_re)
-
-            ds.add_figure(f"{self.name}_imag", fig=fig_imag)
-            image_path_imag = ds._new_file_path(ds.savefolders[1], f"{self.name}_imag", suffix="png")
-            self.figure_paths.append(image_path_imag)
-
-            ds.add_figure(f"{self.name}_mag", fig=fig_mag)
-            image_path_mag = ds._new_file_path(ds.savefolders[1], f"{self.name}_mag", suffix="png")
-            self.figure_paths.append(image_path_mag)
+            ds.add_figure(self.name, fig=fig)
+            image_path = ds._new_file_path(ds.savefolders[1], self.name, suffix="png")
+            self.figure_paths.append(image_path)
 
     def _check_quality(self) -> CheckResult:
         threshold = self.snr_threshold()
-        snr_passed = self._winner_snr >= threshold
+        snr_passed = self.snr >= threshold
 
         max_error = self.max_fit_param_error()
         bad_params = []
-        for pname, param in self._winner_fit.params.items():
+        for pname, param in self.fit_result.params.items():
             if param.stderr is None:
                 bad_params.append(f"{pname}(no stderr)")
             elif param.value == 0 or abs(param.stderr / param.value) > max_error:
@@ -563,19 +475,14 @@ class PowerRabi(ProtocolOperation):
                 bad_params.append(f"{pname}({pct:.0f}%)")
 
         passed = snr_passed and len(bad_params) == 0
-        parts = [f"winner={self._winner_name}, SNR={self._winner_snr:.3f} (threshold={threshold:.3f})"]
+        parts = [f"SNR={self.snr:.3f} (threshold={threshold:.3f})"]
         if bad_params:
             parts.append(f"high-error params: {', '.join(bad_params)}")
         return CheckResult("quality_check", passed, "; ".join(parts))
 
     def correct(self, result: EvaluateResult) -> EvaluateResult:
-        # Pop all figures before super() auto-appends the last one
-        fig_re   = self.figure_paths.pop(0) if len(self.figure_paths) >= 3 else None
-        fig_imag = self.figure_paths.pop(0) if self.figure_paths else None
-        fig_mag  = self.figure_paths.pop(0) if self.figure_paths else None
-        self.figure_paths.clear()  # prevent auto-append
-
-        plot_map = {"re": fig_re, "imag": fig_imag, "mag": fig_mag}
+        figure = self.figure_paths[0] if self.figure_paths else None
+        self.figure_paths.clear()
 
         self.report_output.append(
             f"## Power Rabi\n"
@@ -584,15 +491,13 @@ class PowerRabi(ProtocolOperation):
             f"Data Path: `{self.data_loc}`\n\n"
         )
 
-        for i, (comp_name, (comp_snr, comp_fit, comp_key)) in enumerate(self._sorted_components):
-            tag = "(SELECTED)" if i == 0 else "(NOT SELECTED)"
-            self.report_output.append(f"### **{comp_name} Component {tag}**\n")
-            if plot_map[comp_key]:
-                self.report_output.append(plot_map[comp_key])
-            self.report_output.append(
-                f"SNR={comp_snr:.3f}\n\n"
-                f"**Fit Report:**\n```\n{str(comp_fit.lmfit_result.fit_report())}\n```\n\n"
-            )
+        self.report_output.append("### Rotated Signal Fit\n")
+        if figure:
+            self.report_output.append(figure)
+        self.report_output.append(
+            f"SNR={self.snr:.3f}\n\n"
+            f"**Fit Report:**\n```\n{str(self.fit_result.lmfit_result.fit_report())}\n```\n\n"
+        )
 
         result = super().correct(result)   # adds check table + success update line
         return result

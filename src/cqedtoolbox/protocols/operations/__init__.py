@@ -1,3 +1,26 @@
+from enum import Enum
+
+from cqedtoolbox.fitfuncs.resonators import (
+    HangerResponseBruno,
+    ReflectionResponse,
+    TransmissionResponse,
+)
+
+
+class ResonatorGeometry(Enum):
+    HANGER = "hanger"
+    REFLECTION = "reflection"
+    TRANSMISSION = "transmission"
+
+    @property
+    def fit_cls(self):
+        if self is ResonatorGeometry.HANGER:
+            return HangerResponseBruno
+        if self is ResonatorGeometry.REFLECTION:
+            return ReflectionResponse
+        return TransmissionResponse
+
+
 from cqedtoolbox.protocols.operations.single_qubit.res_spec import ResonatorSpectroscopy
 from cqedtoolbox.protocols.operations.single_qubit.res_spec_vs_gain import ResonatorSpectroscopyVsGain
 from cqedtoolbox.protocols.operations.fluxonium.res_spec_vs_flux import ResonatorSpectroscopyVsFlux
