@@ -361,7 +361,7 @@ class ResonatorSpectroscopyVsGain(ProtocolOperation):
         ax.plot(gains, snr_values, marker='.', linestyle='-')
         return fig
 
-    def analyze(self):
+    def _analyze_default(self):
         with DatasetAnalysis(self.data_loc, self.name) as ds:
             # Create magnitude colorbar plot
             mag_fig = self._plot_magnitude_colorbar()

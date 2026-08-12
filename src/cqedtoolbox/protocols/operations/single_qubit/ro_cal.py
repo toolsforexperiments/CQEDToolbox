@@ -187,7 +187,7 @@ class ReadoutCalibration(ProtocolOperation):
         self.I_excited = excited["i"].values
         self.Q_excited = excited["q"].values
 
-    def analyze(self):
+    def _analyze_default(self):
         # Calculate mean positions
         self.mean_I_ground = np.mean(self.I_ground)
         self.mean_Q_ground = np.mean(self.Q_ground)

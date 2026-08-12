@@ -520,7 +520,7 @@ class ResonatorSpectroscopy(ProtocolOperation):
         self.independents["frequencies"] = data["frequencies"]["values"]
         self.dependents["signal"] = data["signal"]["values"]
 
-    def analyze(self):
+    def _analyze_default(self):
         with DatasetAnalysis(self.data_loc, self.name) as ds:
             ret = self.add_mag_and_unwind_and_fit(self.independents["frequencies"],
                                                   self.dependents["signal"],

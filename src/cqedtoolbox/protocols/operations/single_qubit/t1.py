@@ -377,7 +377,7 @@ class T1Operation(ProtocolOperation):
             fig_mag
         )
 
-    def analyze(self):
+    def _analyze_default(self):
         with DatasetAnalysis(self.data_loc, self.name) as ds:
             result_re, result_imag, result_mag, fig_re, fig_imag, fig_mag = self._fit_exponential_components(
                 self.independents["delays"],

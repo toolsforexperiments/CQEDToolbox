@@ -216,7 +216,7 @@ class FluxoniumPiSpectroscopy(ProtocolOperation):
         self.dependents["signal"] = np.asarray(data["signal"]["values"])
 
 
-    def analyze(self):
+    def _analyze_default(self):
         """
         Pi spectroscopy analysis (fluxonium):
         1) average over repetitions -> mean complex signal per (flux, freq)

@@ -293,7 +293,7 @@ class ResonatorSpectroscopyAfterPi(ProtocolOperation):
         self.independents_after["frequencies"] = after["ssb_frequency"].values + lo
         self.dependents_after["signal"] = after["signal_Re"].values + 1j * after["signal_Im"].values
 
-    def analyze(self):
+    def _analyze_default(self):
         # Analyze before measurement
         with DatasetAnalysis(self.data_loc_before, f"{self.name}_before") as ds:
             ret_before = self._add_mag_and_unwind_and_fit(
