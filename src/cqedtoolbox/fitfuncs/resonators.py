@@ -285,6 +285,15 @@ class TransmissionResponse(Fit):
     #     return photon_number
 
 
+class TLSHangerResponse(Fit):
+    @staticmethod
+    def model():
+        pass
+
+    @staticmethod
+    def guess():
+        pass
+
 class AvoidedCrossing(Fit):
 
     @staticmethod
