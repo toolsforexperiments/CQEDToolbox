@@ -293,7 +293,7 @@ class TransmissionResponse(Fit):
 class TLSHangerResponse(Fit):
     @staticmethod
     def model(
-        freq,
+        coordinates,
         kappa_internal,
         kappa_external,
         g,
@@ -305,10 +305,9 @@ class TLSHangerResponse(Fit):
         phase_slope,
         transmission_slope,
         gamma_tls,
-        temperature=10e-3,
     ):
-
-        freq = np.asarray(freq, dtype=float)
+        temperature=10e-3
+        freq = np.asarray(coordinates, dtype=float)
 
         df = freq - f_resonator
         kappa_total = kappa_internal + kappa_external
@@ -329,17 +328,11 @@ class TLSHangerResponse(Fit):
 
     @staticmethod
     def guess(
-        freq,
+        coordinates,
         data,
-        f_resonator_guess=None,
-        f_tls_guess=None,
-        kappa_internal_guess=None,
-        kappa_external_guess=None,
-        g_guess=None,
-        gamma_tls_guess=None,
     ):
 
-        freq = np.asarray(freq, dtype=float)
+        freq = np.asarray(coordinates, dtype=float)
         data = np.asarray(data, dtype=complex)
 
         f_min = np.nanmin(freq)
@@ -383,31 +376,16 @@ class TLSHangerResponse(Fit):
 
             f_center = 0.5 * (f_minus + f_plus)
             splitting = abs(f_plus - f_minus)
-
-            if f_resonator_guess is None:
-                f_resonator_guess = f_center
-
-            if f_tls_guess is None:
-                f_tls_guess = f_center
-
-            if g_guess is None:
-                g_guess = 0.5 * splitting
-
-            if gamma_tls_guess is None:
-                gamma_tls_guess = 0.2 * splitting
-
-            if kappa_internal_guess is None:
-                kappa_internal_guess = 0.1 * splitting
-
-            if kappa_external_guess is None:
-                kappa_external_guess = 0.2 * splitting
+            f_resonator_guess = f_center
+            f_tls_guess = f_center
+            g_guess = 0.5 * splitting
+            gamma_tls_guess = 0.2 * splitting
+            kappa_internal_guess = 0.1 * splitting
+            kappa_external_guess = 0.2 * splitting
 
         else:
-            if f_resonator_guess is None:
-                f_resonator_guess = freq[np.nanargmin(mag)]
-
-            if f_tls_guess is None:
-                f_tls_guess = f_resonator_guess
+            f_resonator_guess = freq[np.nanargmin(mag)]
+            f_tls_guess = f_resonator_guess
 
             edge_level = np.nanmedian(edge_mag)
             min_level = np.nanmin(mag)
