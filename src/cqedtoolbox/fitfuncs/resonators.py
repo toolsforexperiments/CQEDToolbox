@@ -351,11 +351,9 @@ class TLSHangerResponse(Fit):
 
         mag = np.abs(data)
 
-        # Smooth only for initial guessing.
         smooth_sigma_pts = max(2, len(freq) // 300)
         mag_smooth = gaussian_filter1d(mag, smooth_sigma_pts)
 
-        # Find dips as peaks in inverted magnitude.
         inv = np.nanmax(mag_smooth) - mag_smooth
 
         peaks, props = find_peaks(
@@ -364,7 +362,6 @@ class TLSHangerResponse(Fit):
             distance=max(5, len(freq) // 50),
         )
 
-        # Estimate off-resonant amplitude from trace edges.
         n_edge = max(3, len(freq) // 10)
         edge_mag = np.concatenate([
             mag[:n_edge],
@@ -375,7 +372,7 @@ class TLSHangerResponse(Fit):
         if not np.isfinite(A_guess) or A_guess <= 0:
             A_guess = 1.0
 
-        # If two clear dips exist, use the two most prominent dips.
+        # If two clear dips exist, use the two most prominent dips
         if len(peaks) >= 2:
             prominences = props["prominences"]
             strongest = peaks[np.argsort(prominences)[-2:]]
@@ -406,7 +403,6 @@ class TLSHangerResponse(Fit):
                 kappa_external_guess = 0.2 * splitting
 
         else:
-            # Fall back to single-dip guesses.
             if f_resonator_guess is None:
                 f_resonator_guess = freq[np.nanargmin(mag)]
 
