@@ -6,9 +6,14 @@ import scipy
 from matplotlib import pyplot as plt
 from pathlib import Path
 
+from scipy.signal import find_peaks
+from scipy.ndimage import gaussian_filter1d
+
 from matplotlib.ticker import MaxNLocator
 from labcore.analysis.fit import Fit, FitResult
 
+hbar = 1.054571817e-34
+kB = 1.380649e-23
 
 class ReflectionResponse(Fit):
 
@@ -287,12 +292,170 @@ class TransmissionResponse(Fit):
 
 class TLSHangerResponse(Fit):
     @staticmethod
-    def model():
-        pass
+    def model(
+        freq,
+        kappa_internal,
+        kappa_external,
+        g,
+        f_tls,
+        f_resonator,
+        A,
+        theta,
+        phase_offset,
+        phase_slope,
+        transmission_slope,
+        gamma_tls,
+        temperature=10e-3,
+    ):
+
+        freq = np.asarray(freq, dtype=float)
+
+        df = freq - f_resonator
+        kappa_total = kappa_internal + kappa_external
+        amp_background = A * (1 + transmission_slope * df / f_resonator)
+        phase_background = np.exp(1j * (phase_offset + phase_slope * df))
+
+        sigma = np.tanh(2 * np.pi * hbar * f_tls / (2 * kB * temperature))
+        chi_tls = g**2 * sigma / (f_tls - freq + 1j * sigma * gamma_tls / 2)
+        kappa_external_complex = kappa_external * np.exp(1j * theta)
+
+        response = 1 - (kappa_external_complex / 2) / (
+            1j * df
+            + kappa_total / 2
+            + 1j * chi_tls
+        )
+
+        return amp_background * phase_background * response
 
     @staticmethod
-    def guess():
-        pass
+    def guess(
+        freq,
+        data,
+        f_resonator_guess=None,
+        f_tls_guess=None,
+        kappa_internal_guess=None,
+        kappa_external_guess=None,
+        g_guess=None,
+        gamma_tls_guess=None,
+    ):
+
+        freq = np.asarray(freq, dtype=float)
+        data = np.asarray(data, dtype=complex)
+
+        f_min = np.nanmin(freq)
+        f_max = np.nanmax(freq)
+        span = f_max - f_min
+
+        if span <= 0:
+            raise ValueError("Frequency array must span a nonzero range.")
+
+        mag = np.abs(data)
+
+        # Smooth only for initial guessing.
+        smooth_sigma_pts = max(2, len(freq) // 300)
+        mag_smooth = gaussian_filter1d(mag, smooth_sigma_pts)
+
+        # Find dips as peaks in inverted magnitude.
+        inv = np.nanmax(mag_smooth) - mag_smooth
+
+        peaks, props = find_peaks(
+            inv,
+            prominence=0.05 * np.nanmax(inv),
+            distance=max(5, len(freq) // 50),
+        )
+
+        # Estimate off-resonant amplitude from trace edges.
+        n_edge = max(3, len(freq) // 10)
+        edge_mag = np.concatenate([
+            mag[:n_edge],
+            mag[-n_edge:],
+        ])
+
+        A_guess = np.nanmedian(edge_mag)
+        if not np.isfinite(A_guess) or A_guess <= 0:
+            A_guess = 1.0
+
+        # If two clear dips exist, use the two most prominent dips.
+        if len(peaks) >= 2:
+            prominences = props["prominences"]
+            strongest = peaks[np.argsort(prominences)[-2:]]
+            strongest = np.sort(strongest)
+
+            f_minus = freq[strongest[0]]
+            f_plus = freq[strongest[1]]
+
+            f_center = 0.5 * (f_minus + f_plus)
+            splitting = abs(f_plus - f_minus)
+
+            if f_resonator_guess is None:
+                f_resonator_guess = f_center
+
+            if f_tls_guess is None:
+                f_tls_guess = f_center
+
+            if g_guess is None:
+                g_guess = 0.5 * splitting
+
+            if gamma_tls_guess is None:
+                gamma_tls_guess = 0.2 * splitting
+
+            if kappa_internal_guess is None:
+                kappa_internal_guess = 0.1 * splitting
+
+            if kappa_external_guess is None:
+                kappa_external_guess = 0.2 * splitting
+
+        else:
+            # Fall back to single-dip guesses.
+            if f_resonator_guess is None:
+                f_resonator_guess = freq[np.nanargmin(mag)]
+
+            if f_tls_guess is None:
+                f_tls_guess = f_resonator_guess
+
+            edge_level = np.nanmedian(edge_mag)
+            min_level = np.nanmin(mag)
+            half_depth_level = min_level + 0.5 * (edge_level - min_level)
+
+            below = np.where(mag < half_depth_level)[0]
+
+            if len(below) >= 2:
+                kappa_total_guess = abs(freq[below[-1]] - freq[below[0]])
+            else:
+                kappa_total_guess = 0.05 * span
+
+            if not np.isfinite(kappa_total_guess) or kappa_total_guess <= 0:
+                kappa_total_guess = 0.05 * span
+
+            if kappa_internal_guess is None:
+                kappa_internal_guess = 0.3 * kappa_total_guess
+
+            if kappa_external_guess is None:
+                kappa_external_guess = 0.7 * kappa_total_guess
+
+            if g_guess is None:
+                g_guess = 0.25 * kappa_total_guess
+
+            if gamma_tls_guess is None:
+                gamma_tls_guess = 0.2 * kappa_total_guess
+
+        phase_offset_guess = np.angle(np.nanmean(data))
+        if not np.isfinite(phase_offset_guess):
+            phase_offset_guess = 0.0
+
+        return dict(
+            kappa_internal=kappa_internal_guess,
+            kappa_external=kappa_external_guess,
+            g=g_guess,
+            f_tls=f_tls_guess,
+            f_resonator=f_resonator_guess,
+            A=A_guess,
+            theta=0,
+            phase_offset=phase_offset_guess,
+            phase_slope=0,
+            transmission_slope=0,
+            gamma_tls=gamma_tls_guess,
+        )
 
 class AvoidedCrossing(Fit):
 
