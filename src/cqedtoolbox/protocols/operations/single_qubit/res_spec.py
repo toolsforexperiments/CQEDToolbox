@@ -574,7 +574,6 @@ class ResonatorSpectroscopy(ProtocolOperation):
         with DatasetAnalysis(self.data_loc, self.name) as ds:
             ret = self.add_mag_and_unwind_and_fit(self.independents["frequencies"],
                                                   self.dependents["signal"],
-                                                  self.platform_type,
                                                   self._fit_cls,
                                                   "Resonator Spectroscopy")
 
