@@ -19,7 +19,7 @@ from labcore.protocols.base import ProtocolOperation, OperationStatus, serialize
 from cqedtoolbox.protocols.operations.fluxonium.res_spec_vs_flux import _readout_frequencies, _fluxonium_basis
 from cqedtoolbox.protocols.parameters import (
     Repetition, StartFlux, EndFlux, FluxSteps, ResonatorSpecSteps, StartPiSpecFrequency, EndPiSpecFrequency,
-    QubitFrequency, GainPulseDuration, ECParam, ELParam, EJParam, ZeroFluxCurrent, ReadoutFrequency
+    QubitFrequency, GainPulseDuration, ECParam, ELParam, EJParam, ZeroFluxCurrent, ReadoutFrequency, GainMultiplier
 )
 
 logger = logging.getLogger(__name__)
@@ -122,6 +122,7 @@ class FluxoniumPiSpectroscopy(ProtocolOperation):
             start_freq=StartPiSpecFrequency(params),
             end_freq=EndPiSpecFrequency(params),
             rabi_duration=GainPulseDuration(params),
+            gain_multiplier=GainMultiplier(params),
             EC=ECParam(params),
             EL=ELParam(params),
             EJ=EJParam(params),
@@ -165,7 +166,7 @@ class FluxoniumPiSpectroscopy(ProtocolOperation):
         end_flux = self.flux_end()
         flux_vals = np.linspace(start_flux, end_flux, n_flux)
         freq_vals = np.linspace(start_freq, end_freq, n_freq)
-        V_drive = _solve_for_amplitude(5*np.pi, self.rabi_duration(), self.EC(), self.EL(), self.EJ(), flux_vals[n_flux//2]+self.Earth_flux())
+        V_drive = self.gain_multiplier()*_solve_for_amplitude(5*np.pi, self.rabi_duration(), self.EC(), self.EL(), self.EJ(), flux_vals[n_flux//2]+self.Earth_flux())
         fr_g_vs_flux=[]
         fr_e_vs_flux=[]
         for flux in flux_vals:
