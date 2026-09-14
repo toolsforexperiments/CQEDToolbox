@@ -2,7 +2,7 @@ import logging
 
 import Pyro4
 from qick import QickConfig
-
+from qick.pyro import make_proxy
 
 logger = logging.getLogger(__name__)
 
@@ -37,11 +37,11 @@ class QBoardConfig:
         :return: soccfg: QickConfig instance.
         """
 
-        Pyro4.config.SERIALIZER = 'pickle'
-        Pyro4.config.PICKLE_PROTOCOL_VERSION = 4
-        ns = Pyro4.locateNS(host=self.nameserver_host, port=self.nameserver_port)
-        soc = Pyro4.Proxy(ns.lookup(self.nameserver_name))
-        soccfg = QickConfig(soc.get_cfg())
+        soc, soccfg = make_proxy(ns_host = self.nameserver_host, 
+                                 ns_port = self.nameserver_port, 
+                                 proxy_name = self.nameserver_name,
+                                 remote_traceback = True)
+
         self.soc = soc
         self.soccfg = soccfg
         logger.info("Generated soccfg")
