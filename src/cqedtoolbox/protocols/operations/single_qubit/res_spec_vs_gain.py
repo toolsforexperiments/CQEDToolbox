@@ -23,6 +23,7 @@ from cqedtoolbox.protocols.parameters import (
     ReadoutGain,
     ReadoutLength, StartReadoutGain, EndReadoutGain, ResonatorSpecSteps, ResonatorSpecVsGainSteps,
     nestedAttributeFromString,
+    opx_check_readout_window,
 )
 from cqedtoolbox.protocols.operations.single_qubit.res_spec import ResonatorSpectroscopy, SyntheticHangerResonatorData
 from cqedtoolbox.measurement_lib.opx.advanced.qubit_tuneup import measure_pulse_resonator_spec_vs_readout_amp
@@ -246,6 +247,7 @@ class ResonatorSpectroscopyVsGain(ProtocolOperation):
 
     def _measure_opx(self) -> Path:
         logger.info("Starting opx resonator spectroscopy vs gain measurement")
+        opx_check_readout_window(self.params)
         loc = measure_pulse_resonator_spec_vs_readout_amp()
         logger.info("Measurement complete")
         return loc
@@ -262,8 +264,10 @@ class ResonatorSpectroscopyVsGain(ProtocolOperation):
 
     def _load_data_opx(self):
         data = load_as_xr(self.data_loc).mean("repetition")
-        q = nestedAttributeFromString(self.params, "active.qubit")()
-        lo = nestedAttributeFromString(self.params, f"{q}.readout.LO")()
+        # Use the LO saved with the data, not the live one: it may have moved since the measurement.
+        saved = DatasetAnalysis(self.data_loc, self.name)
+        q = saved.load_saved_parameter("active.qubit")
+        lo = saved.load_saved_parameter(f"{q}.readout.LO")
         self.independents["frequencies"] = data["ssb_frequency"].values + lo
         self.independents["gains"] = data["amp"].values
         self.dependents["signal"] = data["signal_Re"].values + 1j * data["signal_Im"].values

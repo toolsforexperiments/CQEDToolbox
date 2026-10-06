@@ -24,6 +24,7 @@ from cqedtoolbox.protocols.parameters import (
     SaturationSpecSteps,
     StartSaturationSpecFrequency, EndSaturationSpecFrequency, QubitFrequency,
     SaturationSpecDriveGain,
+    opx_check_qubit_window,
 )
 from cqedtoolbox.measurement_lib.opx.advanced.qubit_tuneup import measure_qubit_ssb_spec_saturation
 from cqedtoolbox.measurement_lib.qick.single_transmon_v2 import PulseProbeSpectroscopy
@@ -648,6 +649,7 @@ class SaturationSpectroscopy(ProtocolOperation):
 
     def _measure_opx(self) -> Path:
         logger.info("Starting opx saturation spectroscopy measurement")
+        opx_check_qubit_window(self.params, "scripts.qubit_tuneup.saturation_spec_range")
         loc = measure_qubit_ssb_spec_saturation()
         logger.info("Measurement complete")
         return loc
@@ -663,7 +665,11 @@ class SaturationSpectroscopy(ProtocolOperation):
 
     def _load_data_opx(self):
         data = load_as_xr(self.data_loc).mean("repetition")
-        self.independents["frequencies"] = data["ssb_frequency"].values
+        # Use the LO saved with the data, not the live one: it may have moved since the measurement.
+        saved = DatasetAnalysis(self.data_loc, self.name)
+        q = saved.load_saved_parameter("active.qubit")
+        lo = saved.load_saved_parameter(f"{q}.LO")
+        self.independents["frequencies"] = data["ssb_frequency"].values + lo
         self.dependents["signal"] = data["signal_Re"].values + 1j * data["signal_Im"].values
 
     def _measure_dummy(self) -> Path:
