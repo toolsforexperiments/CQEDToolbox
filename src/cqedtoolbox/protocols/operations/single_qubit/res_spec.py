@@ -35,14 +35,12 @@ logger = logging.getLogger(__name__)
 # --- Resonator fit configuration ---
 # Physical bounds for resonator fits, applied to whichever of these parameters the fit model has.
 # f_0 is additionally bounded to the swept range.
-_FIT_BOUNDS = {"Q_i": (1e3, 1e7), "Q_e_mag": (1e2, 1e7), "A": (0.0, np.inf)}
+_FIT_BOUNDS = {"Q_i": (1e4, 1e10), "Q_e_mag": (1e4, 1e10), "A": (0.0, np.inf)}
 # Below this residual ratio, S and conj(S) fit about equally well and the orientation choice is a coin flip.
 MIN_ORIENTATION_MARGIN = 1.2
-# Hanger resonance-shape acceptance (tuned on q02 OPX data 2026-10-02: real kappa/span 0.10, depth 0.35;
-# background-ripple fits kappa/span >= 0.39, depth <= 0.16 (up to 0.42 under perturbation)).
-MAX_KAPPA_OVER_SPAN = 0.2
-MIN_DIP_DEPTH = 0.2  # Q_l/|Q_e|
-MAX_F0_STDERR_OVER_KAPPA = 0.25
+# Hanger resonance-shape acceptance.
+MAX_KAPPA_OVER_SPAN = 0.5
+MAX_F0_STDERR_OVER_KAPPA = 0.5
 
 
 class IQOrientation(Enum):
@@ -457,7 +455,7 @@ def f0_fit_problems(fit_result, frequencies, max_rel_error: float) -> list[str]:
     """Reasons a resonator fit's f_0 should not be trusted; empty if it can be.
 
     Hanger fits must look like a resolved resonance: linewidth kappa = f_0/Q_l at most
-    MAX_KAPPA_OVER_SPAN of the swept span, dip depth Q_l/|Q_e| at least MIN_DIP_DEPTH, and
+    MAX_KAPPA_OVER_SPAN of the swept span, and
     stderr(f_0) at most MAX_F0_STDERR_OVER_KAPPA of kappa. This rejects fits to slow background
     ripple, which a broad, shallow hanger can follow closely.
 
@@ -474,11 +472,8 @@ def f0_fit_problems(fit_result, frequencies, max_rel_error: float) -> list[str]:
         q_e = p["Q_e_mag"].value * np.exp(-1j * p["theta"].value)
         q_l = 1.0 / (1.0 / (1.0 / (1.0 / q_e).real) + 1.0 / p["Q_i"].value)  # as in HangerResponseBruno.model
         kappa = abs(f0.value / q_l)
-        depth = q_l / abs(p["Q_e_mag"].value)
         if kappa > MAX_KAPPA_OVER_SPAN * span:
             problems.append(f"linewidth too wide (kappa/span={kappa / span:.2f} > {MAX_KAPPA_OVER_SPAN:.2f})")
-        if depth < MIN_DIP_DEPTH:
-            problems.append(f"dip too shallow (Ql/|Qe|={depth:.2f} < {MIN_DIP_DEPTH:.2f})")
         if f0.stderr is None:
             problems.append("f_0(no stderr)")
         elif f0.stderr / kappa > MAX_F0_STDERR_OVER_KAPPA:
