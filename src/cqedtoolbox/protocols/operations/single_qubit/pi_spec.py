@@ -24,7 +24,8 @@ from cqedtoolbox.protocols.parameters import (
     QubitFrequency,
     QubitGain,
     ReadoutGain,
-    ReadoutLength
+    ReadoutLength,
+    opx_check_qubit_window,
 )
 from cqedtoolbox.measurement_lib.opx.advanced.qubit_tuneup import measure_pi_spec
 from cqedtoolbox.measurement_lib.qick.single_transmon_v2 import PiSpecProgram
@@ -232,6 +233,7 @@ class PiSpectroscopy(ProtocolOperation):
 
     def _measure_opx(self) -> Path:
         logger.info("Starting opx pi spectroscopy measurement")
+        opx_check_qubit_window(self.params, "scripts.qubit_tuneup.qubit_spec_range")
         loc = measure_pi_spec()
         logger.info("Measurement complete")
         return loc
@@ -247,7 +249,11 @@ class PiSpectroscopy(ProtocolOperation):
         if "repetition" in data.dims:
             data = data.mean("repetition")
         data, _ = rotate_complex_qubit_data(data)
-        self.independents["frequencies"] = data["ssb_frequency"].values
+        # Use the LO saved with the data, not the live one: it may have moved since the measurement.
+        saved = DatasetAnalysis(self.data_loc, self.name)
+        q = saved.load_saved_parameter("active.qubit")
+        lo = saved.load_saved_parameter(f"{q}.LO")
+        self.independents["frequencies"] = data["ssb_frequency"].values + lo
         self.dependents["signal"] = data["signal"].values
 
     def _fit_gaussian(self, frequencies, signal, fig_title="") -> tuple:

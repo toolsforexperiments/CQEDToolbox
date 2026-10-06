@@ -25,6 +25,7 @@ from cqedtoolbox.protocols.parameters import (
     ReadoutLength,
     Detuning,
     nestedAttributeFromString,
+    opx_check_readout_window,
 )
 from cqedtoolbox.measurement_lib.opx.advanced.qubit_tuneup import measure_pulse_resonator_spec_after_pi_pulse
 from cqedtoolbox.measurement_lib.qick.single_transmon_v2 import FreqSweepProgram, ResProbeProgram
@@ -247,6 +248,7 @@ class ResonatorSpectroscopyAfterPi(ProtocolOperation):
 
     def _measure_opx(self) -> Path:
         logger.info("Starting opx resonator spectroscopy before/after pi measurement")
+        opx_check_readout_window(self.params)
         loc = measure_pulse_resonator_spec_after_pi_pulse()
         self.data_loc_before = loc
         self.data_loc_after = loc
@@ -274,8 +276,10 @@ class ResonatorSpectroscopyAfterPi(ProtocolOperation):
 
     def _load_data_opx(self):
         data = load_as_xr(self.data_loc).mean("repetition")
-        q = nestedAttributeFromString(self.params, "active.qubit")()
-        lo = nestedAttributeFromString(self.params, f"{q}.readout.LO")()
+        # Use the LO saved with the data, not the live one: it may have moved since the measurement.
+        saved = DatasetAnalysis(self.data_loc, self.name)
+        q = saved.load_saved_parameter("active.qubit")
+        lo = saved.load_saved_parameter(f"{q}.readout.LO")
 
         before = data.sel(setting=1)
         self.independents_before["frequencies"] = before["ssb_frequency"].values + lo

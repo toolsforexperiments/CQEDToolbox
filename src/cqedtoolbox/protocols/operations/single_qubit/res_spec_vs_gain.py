@@ -23,6 +23,7 @@ from cqedtoolbox.protocols.parameters import (
     ReadoutGain,
     ReadoutLength, StartReadoutGain, EndReadoutGain, ResonatorSpecSteps, ResonatorSpecVsGainSteps,
     nestedAttributeFromString,
+    opx_check_readout_window,
 )
 from cqedtoolbox.protocols.operations.single_qubit.res_spec import (
     ResonatorSpectroscopy,
@@ -315,6 +316,7 @@ class ResonatorSpectroscopyVsGain(ProtocolOperation):
 
     def _measure_opx(self) -> Path:
         logger.info("Starting opx resonator spectroscopy vs gain measurement")
+        opx_check_readout_window(self.params)
         # The OPX sweep writes each gain into the readout amp parameter and leaves it at the sweep end.
         # Put the original back (also on errors/interrupts); on SUCCESS the success update then writes optimal_gain.
         # It also sets a short shot delay on the global single_transmon options; put back the delay setup chose
@@ -342,8 +344,10 @@ class ResonatorSpectroscopyVsGain(ProtocolOperation):
 
     def _load_data_opx(self):
         data = load_as_xr(self.data_loc).mean("repetition").transpose("ssb_frequency", "amp")
-        q = nestedAttributeFromString(self.params, "active.qubit")()
-        lo = nestedAttributeFromString(self.params, f"{q}.readout.LO")()
+        # Use the LO saved with the data, not the live one: it may have moved since the measurement.
+        saved = DatasetAnalysis(self.data_loc, self.name)
+        q = saved.load_saved_parameter("active.qubit")
+        lo = saved.load_saved_parameter(f"{q}.readout.LO")
         # Same (n_freq, n_gain) grid layout as the dummy and qick loaders.
         freqs, gains = np.meshgrid(data["ssb_frequency"].values + lo, data["amp"].values, indexing="ij")
         self.independents["frequencies"] = freqs

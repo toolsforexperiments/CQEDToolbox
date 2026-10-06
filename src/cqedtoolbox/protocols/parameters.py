@@ -5,9 +5,61 @@ TODO LIST:
 * ROCalibration should store the centers of both g and e states in the parameter manager and have ProtocolParameters for them.
 
 """
+import logging
 from dataclasses import dataclass, field
 from labcore.protocols.base import ProtocolParameterBase
 from instrumentserver.helpers import nestedAttributeFromString
+
+
+logger = logging.getLogger(__name__)
+
+# Allowed IF range of the OPX. When a new center frequency (or window) does not fit inside it,
+# the LO is moved so that the center sits in the middle of the range.
+OPX_MIN_IF = 50e6
+OPX_MAX_IF = 400e6
+OPX_CENTER_IF = (OPX_MIN_IF + OPX_MAX_IF) / 2
+
+
+def _opx_set_center(params, lo_path, if_path, frequency, half_span=0.0):
+    """Set the absolute `frequency` as LO + IF.
+
+    If the IF window [IF - half_span, IF + half_span] does not fit in [OPX_MIN_IF, OPX_MAX_IF],
+    the LO is moved so that the IF becomes OPX_CENTER_IF (upper sideband: LO = f - IF).
+    """
+    lo = nestedAttributeFromString(params, lo_path)()
+    if_ = frequency - lo
+    if if_ - half_span < OPX_MIN_IF or if_ + half_span > OPX_MAX_IF:
+        new_lo = frequency - OPX_CENTER_IF
+        logger.info(f"IF {if_ / 1e6:.3f} MHz (±{half_span / 1e6:.3f} MHz) outside the allowed "
+                    f"[{OPX_MIN_IF / 1e6:.0f}, {OPX_MAX_IF / 1e6:.0f}] MHz range: moving {lo_path} "
+                    f"from {lo / 1e6:.3f} MHz to {new_lo / 1e6:.3f} MHz")
+        nestedAttributeFromString(params, lo_path)(new_lo)
+        if_ = OPX_CENTER_IF
+    return nestedAttributeFromString(params, if_path)(if_)
+
+
+def opx_check_if_window(start_if, end_if, label):
+    """Raise ValueError if the IF sweep [start_if, end_if] leaves [OPX_MIN_IF, OPX_MAX_IF]."""
+    lo_if, hi_if = min(start_if, end_if), max(start_if, end_if)
+    if lo_if < OPX_MIN_IF or hi_if > OPX_MAX_IF:
+        raise ValueError(f"{label} IF sweep [{lo_if / 1e6:.3f}, {hi_if / 1e6:.3f}] MHz is outside the allowed "
+                         f"[{OPX_MIN_IF / 1e6:.0f}, {OPX_MAX_IF / 1e6:.0f}] MHz range")
+
+
+def opx_check_readout_window(params):
+    """Check that the current OPX readout frequency sweep fits in the allowed IF range."""
+    q = nestedAttributeFromString(params, "active.qubit")()
+    lo = nestedAttributeFromString(params, f"{q}.readout.LO")()
+    start, end = _opx_readout_window(params)
+    opx_check_if_window(start - lo, end - lo, f"{q} readout")
+
+
+def opx_check_qubit_window(params, range_path):
+    """Check that the current OPX qubit frequency sweep fits in the allowed IF range."""
+    q = nestedAttributeFromString(params, "active.qubit")()
+    lo = nestedAttributeFromString(params, f"{q}.LO")()
+    start, end = _opx_qubit_window(params, range_path)
+    opx_check_if_window(start - lo, end - lo, f"{q} drive")
 
 
 def _opx_readout_window(params):
@@ -27,22 +79,22 @@ def _opx_readout_window(params):
 def _opx_set_readout_window(params, start, end):
     """Write a readout window (absolute Hz) back as center (readout IF) + span (range in BW units)."""
     q = nestedAttributeFromString(params, "active.qubit")()
-    lo = nestedAttributeFromString(params, f"{q}.readout.LO")()
     bw = nestedAttributeFromString(params, f"{q}.readout.bandwidth")()
-    nestedAttributeFromString(params, f"{q}.readout.IF")((start + end) / 2 - lo)
+    _opx_set_center(params, f"{q}.readout.LO", f"{q}.readout.IF", (start + end) / 2, abs(end - start) / 2)
     nestedAttributeFromString(params, "scripts.qubit_tuneup.resonator_spec_range")((end - start) / bw)
 
 
 def _opx_qubit_window(params, range_path):
     q = nestedAttributeFromString(params, "active.qubit")()
-    center = nestedAttributeFromString(params, f"{q}.IF")()
+    center = (nestedAttributeFromString(params, f"{q}.LO")()
+              + nestedAttributeFromString(params, f"{q}.IF")())
     span = nestedAttributeFromString(params, range_path)()
     return center - span / 2, center + span / 2
 
 
 def _opx_set_qubit_window(params, range_path, start, end):
     q = nestedAttributeFromString(params, "active.qubit")()
-    nestedAttributeFromString(params, f"{q}.IF")((start + end) / 2)
+    _opx_set_center(params, f"{q}.LO", f"{q}.IF", (start + end) / 2, abs(end - start) / 2)
     nestedAttributeFromString(params, range_path)(end - start)
 
 
@@ -144,8 +196,7 @@ class ReadoutFrequency(ProtocolParameterBase):
 
     def _opx_setter(self, value):
         q = nestedAttributeFromString(self.params, "active.qubit")()
-        lo = nestedAttributeFromString(self.params, f"{q}.readout.LO")()
-        return nestedAttributeFromString(self.params, f"{q}.readout.IF")(value - lo)
+        return _opx_set_center(self.params, f"{q}.readout.LO", f"{q}.readout.IF", value)
 
 @dataclass
 class ReadoutLength(ProtocolParameterBase):
@@ -822,7 +873,7 @@ class QubitGain(ProtocolParameterBase):
 @dataclass
 class QubitFrequency(ProtocolParameterBase):
     name: str = field(default="qubit_frequency", init=False)
-    description: str = field(default="Intermediate frequency of the qubit", init=False)
+    description: str = field(default="Frequency of the qubit", init=False)
 
     def _dummy_getter(self):
         return self.params.qubit.f()
@@ -840,11 +891,12 @@ class QubitFrequency(ProtocolParameterBase):
 
     def _opx_getter(self):
         q = nestedAttributeFromString(self.params, "active.qubit")()
-        return nestedAttributeFromString(self.params, f"{q}.IF")()
+        return (nestedAttributeFromString(self.params, f"{q}.LO")()
+                + nestedAttributeFromString(self.params, f"{q}.IF")())
 
     def _opx_setter(self, value):
         q = nestedAttributeFromString(self.params, "active.qubit")()
-        return nestedAttributeFromString(self.params, f"{q}.IF")(value)
+        return _opx_set_center(self.params, f"{q}.LO", f"{q}.IF", value)
 
 
 @dataclass
