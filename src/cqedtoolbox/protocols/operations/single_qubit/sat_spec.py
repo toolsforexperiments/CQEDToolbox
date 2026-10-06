@@ -738,19 +738,22 @@ class SaturationSpectroscopy(ProtocolOperation):
         threshold = self.snr_threshold()
         snr_passed = self.snr >= threshold
 
+        # A and gamma are checked too: a fit that collapses onto a single noise point has a huge SNR
+        # and a tiny x0 error, but A and gamma are unconstrained.
         max_error = self.max_fit_param_error()
-        param = self.fit_result.params["x0"]
-        bad_param = None
-        if param.stderr is None:
-            bad_param = "x0(no stderr)"
-        elif param.value == 0 or abs(param.stderr / param.value) > max_error:
-            pct = abs(param.stderr / param.value) * 100 if param.value != 0 else float("inf")
-            bad_param = f"x0({pct:.0f}%)"
+        bad_params = []
+        for pname in ("x0", "gamma", "A"):
+            param = self.fit_result.params[pname]
+            if param.stderr is None:
+                bad_params.append(f"{pname}(no stderr)")
+            elif param.value == 0 or abs(param.stderr / param.value) > max_error:
+                pct = abs(param.stderr / param.value) * 100 if param.value != 0 else float("inf")
+                bad_params.append(f"{pname}({pct:.0f}%)")
 
-        passed = snr_passed and bad_param is None
+        passed = snr_passed and not bad_params
         parts = [f"SNR={self.snr:.3f} (threshold={threshold:.3f})"]
-        if bad_param:
-            parts.append(f"high-error param: {bad_param}")
+        if bad_params:
+            parts.append(f"high-error params: {', '.join(bad_params)}")
 
         return CheckResult("fit_quality", passed, "; ".join(parts))
 
