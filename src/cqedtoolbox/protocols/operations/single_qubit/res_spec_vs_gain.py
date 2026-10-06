@@ -7,7 +7,6 @@ import matplotlib.pyplot as plt
 
 plt.switch_backend("agg")
 
-
 from labcore.analysis import DatasetAnalysis
 from labcore.measurement.storage import run_and_save_sweep
 from labcore.data.datadict_storage import datadict_from_hdf5, load_as_xr
@@ -16,6 +15,7 @@ from labcore.measurement.record import recording, dep, indep
 
 from labcore.protocols.base import (ProtocolOperation, OperationStatus, serialize_fit_params,
                                     CorrectionParameter, CheckResult, Correction, EvaluateResult)
+from cqedtoolbox.protocols.operations import ResonatorGeometry
 from cqedtoolbox.protocols.parameters import (
     Repetition,
     StartReadoutFrequency,
@@ -25,8 +25,14 @@ from cqedtoolbox.protocols.parameters import (
     nestedAttributeFromString,
     opx_check_readout_window,
 )
-from cqedtoolbox.protocols.operations.single_qubit.res_spec import ResonatorSpectroscopy, SyntheticHangerResonatorData
+from cqedtoolbox.protocols.operations.single_qubit.res_spec import (
+    ResonatorSpectroscopy,
+    SyntheticHangerResonatorData,
+    f0_fit_problems,
+    fit_reliability_problem,
+)
 from cqedtoolbox.measurement_lib.opx.advanced.qubit_tuneup import measure_pulse_resonator_spec_vs_readout_amp
+from cqedtoolbox.measurement_lib.opx import single_transmon
 from cqedtoolbox.measurement_lib.qick.single_transmon_v2 import FreqGainSweepProgram
 
 
@@ -103,6 +109,30 @@ class ResSpecVsGainHighSNRThreshold(CorrectionParameter):
 
     def _opx_setter(self, v):
         self.params.corrections.res_spec_vs_gain.high_snr(v)
+
+
+@dataclass
+class ResSpecVsGainMinPassFraction(CorrectionParameter):
+    name: str = field(default="res_spec_vs_gain_min_pass_fraction", init=False)
+    description: str = field(default="Fraction of the low-gain traces that must pass the quality check", init=False)
+
+    def _qick_getter(self):
+        return self.params.corrections.res_spec_vs_gain.min_pass_fraction()
+
+    def _qick_setter(self, v):
+        self.params.corrections.res_spec_vs_gain.min_pass_fraction(v)
+
+    def _dummy_getter(self):
+        return self.params.corrections.res_spec_vs_gain.min_pass_fraction()
+
+    def _dummy_setter(self, v):
+        self.params.corrections.res_spec_vs_gain.min_pass_fraction(v)
+
+    def _opx_getter(self):
+        return self.params.corrections.res_spec_vs_gain.min_pass_fraction()
+
+    def _opx_setter(self, v):
+        self.params.corrections.res_spec_vs_gain.min_pass_fraction(v)
 
 
 @dataclass
@@ -187,9 +217,21 @@ class ResonatorSpectroscopyVsGain(ProtocolOperation):
 
     _SIM_N_GAIN_STEPS = 11
 
-    def __init__(self, params):
+    def __init__(self, params, geometry: ResonatorGeometry | str):
         super().__init__()
         self.params = params
+
+        if isinstance(geometry, str):
+            try:
+                geometry = ResonatorGeometry(geometry.lower())
+            except ValueError as err:
+                valid = ", ".join(g.value for g in ResonatorGeometry)
+                raise ValueError(
+                    f"Unsupported resonator geometry '{geometry}'. Expected one of: {valid}"
+                ) from err
+
+        self.geometry = geometry
+        self._fit_cls = geometry.fit_cls
 
         self._register_inputs(
             repetitions=Repetition(params),
@@ -209,6 +251,7 @@ class ResonatorSpectroscopyVsGain(ProtocolOperation):
             snr_threshold=ResSpecVsGainSNRThreshold(params),
             max_fit_param_error=ResSpecVsGainMaxFitParamError(params),
             high_snr_threshold=ResSpecVsGainHighSNRThreshold(params),
+            min_pass_fraction=ResSpecVsGainMinPassFraction(params),
             repetition_factor=ResSpecVsGainRepetitionFactor(params),
             max_repetition_increases=ResSpecVsGainMaxRepetitionIncreases(params),
         )
@@ -234,6 +277,32 @@ class ResonatorSpectroscopyVsGain(ProtocolOperation):
         self.deviations = []
         self.fit_results = []
         self.snr_values = []
+        self.trace_valid = []
+        self.trace_invalid_reasons = []
+
+    def _trace_in_range(self, freqs, fit_result) -> bool:
+        f0 = fit_result.params["f_0"].value
+        freqs = np.asarray(freqs, dtype=float)
+        return float(np.min(freqs)) <= f0 <= float(np.max(freqs))
+
+    def _trace_invalid_reason(self, freqs, fit_result, snr, fit_problem=None) -> str | None:
+        if not self._trace_in_range(freqs, fit_result):
+            f0 = fit_result.params["f_0"].value
+            fmin = float(np.min(freqs))
+            fmax = float(np.max(freqs))
+            return f"f_0={f0:.6g} outside sweep=[{fmin:.6g}, {fmax:.6g}]"
+
+        if snr < self.snr_threshold():
+            return f"SNR={snr:.3f} < {self.snr_threshold():.3f}"
+
+        if fit_problem:
+            return fit_problem
+
+        problems = f0_fit_problems(fit_result, freqs, self.max_fit_param_error())
+        if problems:
+            return "; ".join(problems)
+
+        return None
 
     def _measure_qick(self) -> Path:
         logger.info("Starting qick resonator spectroscopy vs gain measurement")
@@ -248,7 +317,18 @@ class ResonatorSpectroscopyVsGain(ProtocolOperation):
     def _measure_opx(self) -> Path:
         logger.info("Starting opx resonator spectroscopy vs gain measurement")
         opx_check_readout_window(self.params)
-        loc = measure_pulse_resonator_spec_vs_readout_amp()
+        # The OPX sweep writes each gain into the readout amp parameter and leaves it at the sweep end.
+        # Put the original back (also on errors/interrupts); on SUCCESS the success update then writes optimal_gain.
+        # It also sets a short shot delay on the global single_transmon options; put back the delay setup chose
+        # (e.g. 10*T1) so the following ops let the qubit relax between shots.
+        original_gain = self.readout_gain()
+        original_delay = single_transmon.options.repetition_delay
+        try:
+            loc = measure_pulse_resonator_spec_vs_readout_amp()
+        finally:
+            self.readout_gain(original_gain)
+            single_transmon.options.repetition_delay = original_delay
+            logger.info(f"Readout gain restored to {original_gain}, repetition delay to {original_delay} ns")
         logger.info("Measurement complete")
         return loc
 
@@ -263,13 +343,15 @@ class ResonatorSpectroscopyVsGain(ProtocolOperation):
         self.dependents["signal"] = data["signal"]["values"]
 
     def _load_data_opx(self):
-        data = load_as_xr(self.data_loc).mean("repetition")
+        data = load_as_xr(self.data_loc).mean("repetition").transpose("ssb_frequency", "amp")
         # Use the LO saved with the data, not the live one: it may have moved since the measurement.
         saved = DatasetAnalysis(self.data_loc, self.name)
         q = saved.load_saved_parameter("active.qubit")
         lo = saved.load_saved_parameter(f"{q}.readout.LO")
-        self.independents["frequencies"] = data["ssb_frequency"].values + lo
-        self.independents["gains"] = data["amp"].values
+        # Same (n_freq, n_gain) grid layout as the dummy and qick loaders.
+        freqs, gains = np.meshgrid(data["ssb_frequency"].values + lo, data["amp"].values, indexing="ij")
+        self.independents["frequencies"] = freqs
+        self.independents["gains"] = gains
         self.dependents["signal"] = data["signal_Re"].values + 1j * data["signal_Im"].values
 
     def _measure_dummy(self) -> Path:
@@ -348,8 +430,10 @@ class ResonatorSpectroscopyVsGain(ProtocolOperation):
         ax.set_xlabel("Gain")
         ax.set_ylabel("Resonance Frequency (MHz)")
 
-        ax.plot(gains, res_f_arr, marker='.', linestyle='-', label='Data')
-        ax.plot([gains[0], gains[-1]], [res_f_arr[0], res_f_arr[-1]], label='Linear Fit')
+        if len(gains) > 0:
+            ax.plot(gains, res_f_arr, marker='.', linestyle='-', label='Data (passing fits)')
+        if len(gains) >= 2:
+            ax.plot([gains[0], gains[-1]], [res_f_arr[0], res_f_arr[-1]], label='Linear Fit')
         if optimal_gain is not None:
             ax.axvline(x=optimal_gain, linestyle='--', color='red', label='Selected Gain')
         ax.legend()
@@ -377,16 +461,20 @@ class ResonatorSpectroscopyVsGain(ProtocolOperation):
             # Analyze each gain trace individually
             gains = self.independents["gains"][0]
             res_f_arr = []
+            self.fit_results = []
+            self.snr_values = []
+            self.trace_valid = []
+            self.trace_invalid_reasons = []
 
             for i, g in enumerate(gains):
+                folder_name = f"resonator_spec_vs_gain_i={i}_g={g}"
+
                 trace_signal = self.dependents["signal"].T[i]  # Transpose to achieve gain as axis 0
                 freqs = self.independents["frequencies"].T[i]
 
-                folder_name = f"resonator_spec_vs_gain_i={i}_g={g}"
-
                 # Use the static method from ResonatorSpectroscopy
                 ret = ResonatorSpectroscopy.add_mag_and_unwind_and_fit(
-                    freqs, trace_signal, f"Gain = {g}"
+                    freqs, trace_signal, self._fit_cls, f"Gain = {g}"
                 )
 
                 _excluded = {"transmission_slope", "phase_slope", "phase_offset"}
@@ -400,12 +488,15 @@ class ResonatorSpectroscopyVsGain(ProtocolOperation):
                         f"{_null_stderr_params} — re-fitting"
                     )
                     ret = ResonatorSpectroscopy.add_mag_and_unwind_and_fit(
-                        freqs, trace_signal, f"Gain = {g}"
+                        freqs, trace_signal, self._fit_cls, f"Gain = {g}"
                     )
 
                 self.fit_results.append(ret.fit_result)
                 self.snr_values.append(ret.snr)
                 res_f_arr.append(ret.fit_result.params["f_0"].value)
+                invalid_reason = self._trace_invalid_reason(freqs, ret.fit_result, ret.snr, fit_reliability_problem(ret))
+                self.trace_valid.append(invalid_reason is None)
+                self.trace_invalid_reasons.append(invalid_reason)
 
                 # Save individual trace analysis
                 with DatasetAnalysis(self.data_loc, folder_name) as trace_ds:
@@ -422,21 +513,7 @@ class ResonatorSpectroscopyVsGain(ProtocolOperation):
 
             self.resonance_frequencies = res_f_arr
 
-            # Find optimal gain: highest-SNR trace that passes the full quality check
-            snr_threshold = self.snr_threshold()
-            max_error = self.max_fit_param_error()
-            passing_indices = []
-            for i, (snr, fit) in enumerate(zip(self.snr_values, self.fit_results)):
-                if snr < snr_threshold:
-                    continue
-                param = fit.params["f_0"]
-                bad_fit = (
-                    param.stderr is None
-                    or param.value == 0
-                    or abs(param.stderr / param.value) > max_error
-                )
-                if not bad_fit:
-                    passing_indices.append(i)
+            passing_indices = [i for i, valid in enumerate(self.trace_valid) if valid]
 
             if passing_indices:
                 best_idx = max(passing_indices, key=lambda i: self.snr_values[i])
@@ -450,15 +527,22 @@ class ResonatorSpectroscopyVsGain(ProtocolOperation):
             image_path = ds._new_file_path(ds.savefolders[1], "snr_vs_gain", suffix="png")
             self.figure_paths.append(image_path)
 
-            # Linearity info (kept for the plot and stored data)
-            self.slope = (res_f_arr[-1] - res_f_arr[0]) / (gains[-1] - gains[0])
-            self.deviations = [np.abs(f - (self.slope * (g - gains[0]) + res_f_arr[0]))
-                               for g, f in zip(gains, res_f_arr)]
-            self.max_deviation = max(self.deviations)
+            # Linearity info (kept for the plot and stored data), from traces whose fit passed only
+            valid_gains = np.asarray(gains)[passing_indices]
+            valid_res_f = np.asarray(res_f_arr)[passing_indices]
+            if len(passing_indices) >= 2:
+                self.slope = (valid_res_f[-1] - valid_res_f[0]) / (valid_gains[-1] - valid_gains[0])
+                self.deviations = [np.abs(f - (self.slope * (g - valid_gains[0]) + valid_res_f[0]))
+                                   for g, f in zip(valid_gains, valid_res_f)]
+                self.max_deviation = max(self.deviations)
+            else:
+                self.slope = float("nan")
+                self.deviations = []
+                self.max_deviation = float("nan")
 
             # Create gain vs resonance frequency plot (last)
             gain_vs_freq_fig = self._plot_gain_vs_resonance_frequency(
-                gains, res_f_arr, self.optimal_gain
+                valid_gains, valid_res_f, self.optimal_gain
             )
             ds.add_figure("gain_vs_frequency", fig=gain_vs_freq_fig)
 
@@ -475,37 +559,38 @@ class ResonatorSpectroscopyVsGain(ProtocolOperation):
             )
 
     def _check_low_gain_quality(self) -> CheckResult:
-        """Quality check (SNR + f_0 error) for the first 50% of gain traces."""
+        """At least min_pass_fraction of the first 50% of gain traces must pass the quality check."""
         n_low = max(1, len(self.snr_values) // 2)
-        threshold = self.snr_threshold()
-        max_error = self.max_fit_param_error()
+        min_fraction = self.min_pass_fraction()
 
         failures = []
         for i in range(n_low):
-            snr = self.snr_values[i]
-            fit = self.fit_results[i]
-            if snr < threshold:
-                failures.append(f"trace {i}: SNR={snr:.3f} < {threshold:.3f}")
-                continue
-            param = fit.params["f_0"]
-            if param.stderr is None:
-                failures.append(f"trace {i}/f_0: no stderr")
-            elif param.value == 0 or abs(param.stderr / param.value) > max_error:
-                pct = abs(param.stderr / param.value) * 100 if param.value != 0 else float("inf")
-                failures.append(f"trace {i}/f_0: {pct:.0f}%")
+            if not self.trace_valid[i]:
+                failures.append(f"trace {i}: {self.trace_invalid_reasons[i]}")
 
-        passed = len(failures) == 0
-        desc = (f"first {n_low} traces pass quality check" if passed
-                else "; ".join(failures))
+        n_pass = n_low - len(failures)
+        passed = n_pass / n_low >= min_fraction
+        desc = f"{n_pass}/{n_low} low-gain traces pass (required fraction {min_fraction:.2f})"
+        if failures:
+            desc += "; " + "; ".join(failures)
         return CheckResult("low_gain_quality_check", passed, desc)
 
     def _check_high_snr(self) -> CheckResult:
-        """At least one trace must exceed the high SNR threshold."""
+        """At least one valid trace must exceed the high SNR threshold."""
         threshold = self.high_snr_threshold()
-        best = max(self.snr_values)
+        valid_indices = [i for i, valid in enumerate(self.trace_valid) if valid]
+        if not valid_indices:
+            return CheckResult(
+                "high_snr_check",
+                False,
+                "no valid traces remain after fit-range and fit-quality filtering",
+            )
+
+        best_idx = max(valid_indices, key=lambda i: self.snr_values[i])
+        best = self.snr_values[best_idx]
         passed = best >= threshold
-        desc = (f"best SNR={best:.3f} ≥ {threshold:.3f}" if passed
-                else f"best SNR={best:.3f} < {threshold:.3f} — no trace meets high-SNR threshold")
+        desc = (f"best valid trace={best_idx}, SNR={best:.3f} ≥ {threshold:.3f}" if passed
+                else f"best valid trace={best_idx}, SNR={best:.3f} < {threshold:.3f}")
         return CheckResult("high_snr_check", passed, desc)
 
     def correct(self, result: EvaluateResult) -> EvaluateResult:
@@ -530,15 +615,17 @@ class ResonatorSpectroscopyVsGain(ProtocolOperation):
 
         result = super().correct(result)  # check table + success update (writes readout_gain)
 
-        if result.status == OperationStatus.SUCCESS:
-            gains = self.independents["gains"][0]
-            self.report_output.append("\n### Individual Gain Traces\n")
-            for i, (fig_path, g) in enumerate(zip(trace_figures, gains)):
-                self.report_output.extend([
-                    f"\n**Trace {i}: Gain = {g:.3f}**\n"
-                    f"- SNR: {self.snr_values[i]:.3f}\n"
-                    f"- f_0: {self.resonance_frequencies[i]:.3f} MHz\n",
-                    fig_path,
-                ])
+        # Always show the per-trace fits: on a failed attempt they're what explains the failure.
+        gains = self.independents["gains"][0]
+        self.report_output.append("\n### Individual Gain Traces\n")
+        for i, (fig_path, g) in enumerate(zip(trace_figures, gains)):
+            validity = "valid" if self.trace_valid[i] else f"invalid ({self.trace_invalid_reasons[i]})"
+            self.report_output.extend([
+                f"\n**Trace {i}: Gain = {g:.3f}**\n"
+                f"- SNR: {self.snr_values[i]:.3f}\n"
+                f"- f_0: {self.resonance_frequencies[i]:.3f} MHz\n"
+                f"- Status: {validity}\n",
+                fig_path,
+            ])
 
         return result

@@ -173,19 +173,18 @@ class ReadoutCalibration(ProtocolOperation):
     def _load_data_opx(self):
         data = load_as_xr(self.data_loc)
 
+        # single_transmon.readout_calibration: setting 1 = e (pi pulse), setting 2 = g.
+        # The OPX recorder stores the complex "signal" as signal_Re / signal_Im.
         ground = data.sel(setting=2)
         excited = data.sel(setting=1)
 
-        ground_signal = ground["i"].values + 1j * ground["q"].values
-        excited_signal = excited["i"].values + 1j * excited["q"].values
+        self.I_ground = ground["signal_Re"].values
+        self.Q_ground = ground["signal_Im"].values
+        self.dependents_ground["signal"] = self.I_ground + 1j * self.Q_ground
 
-        self.dependents_ground["signal"] = ground_signal
-        self.I_ground = ground["i"].values
-        self.Q_ground = ground["q"].values
-
-        self.dependents_excited["signal"] = excited_signal
-        self.I_excited = excited["i"].values
-        self.Q_excited = excited["q"].values
+        self.I_excited = excited["signal_Re"].values
+        self.Q_excited = excited["signal_Im"].values
+        self.dependents_excited["signal"] = self.I_excited + 1j * self.Q_excited
 
     def _analyze_default(self):
         # Calculate mean positions
@@ -200,9 +199,9 @@ class ReadoutCalibration(ProtocolOperation):
             (self.mean_Q_excited - self.mean_Q_ground)**2
         )
 
-        logger.info(f"Ground state center: I={self.mean_I_ground:.3f}, Q={self.mean_Q_ground:.3f}")
-        logger.info(f"Excited state center: I={self.mean_I_excited:.3f}, Q={self.mean_Q_excited:.3f}")
-        logger.info(f"Distance between centers: {self.distance:.3f}")
+        logger.info(f"Ground state center: I={self.mean_I_ground:.3e}, Q={self.mean_Q_ground:.3e}")
+        logger.info(f"Excited state center: I={self.mean_I_excited:.3e}, Q={self.mean_Q_excited:.3e}")
+        logger.info(f"Distance between centers: {self.distance:.3e}")
 
         # Create combined I/Q scatter plot
         with DatasetAnalysis(self.data_loc_ground, f"{self.name}_combined") as ds:
@@ -227,14 +226,14 @@ class ReadoutCalibration(ProtocolOperation):
             ax.scatter(
                 [self.mean_I_ground], [self.mean_Q_ground],
                 color="k", marker="*", s=100,
-                label=f"Ground mean: ({self.mean_I_ground:.3f}, {self.mean_Q_ground:.3f})"
+                label=f"Ground mean: ({self.mean_I_ground:.3e}, {self.mean_Q_ground:.3e})"
             )
 
             # Plot excited state mean
             ax.scatter(
                 [self.mean_I_excited], [self.mean_Q_excited],
                 color="k", marker="o", s=100,
-                label=f"Excited mean: ({self.mean_I_excited:.3f}, {self.mean_Q_excited:.3f})"
+                label=f"Excited mean: ({self.mean_I_excited:.3e}, {self.mean_Q_excited:.3e})"
             )
 
             ax.legend()
@@ -271,12 +270,12 @@ class ReadoutCalibration(ProtocolOperation):
             f"Excited state data: `{self.data_loc_excited}`\n\n",
             f"### Measurement Complete\n"
             f"**Ground State Center:**\n"
-            f"- I: {self.mean_I_ground:.6f}\n"
-            f"- Q: {self.mean_Q_ground:.6f}\n\n"
+            f"- I: {self.mean_I_ground:.3e}\n"
+            f"- Q: {self.mean_Q_ground:.3e}\n\n"
             f"**Excited State Center:**\n"
-            f"- I: {self.mean_I_excited:.6f}\n"
-            f"- Q: {self.mean_Q_excited:.6f}\n\n"
-            f"**Distance Between Centers:** {self.distance:.6f}\n\n"
+            f"- I: {self.mean_I_excited:.3e}\n"
+            f"- Q: {self.mean_Q_excited:.3e}\n\n"
+            f"**Distance Between Centers:** {self.distance:.3e}\n\n"
             f"The I/Q scatter plot below shows the distribution of single-shot measurements for both states.\n"
             f"A larger distance between centers indicates better readout distinguishability.\n\n",
         ])
