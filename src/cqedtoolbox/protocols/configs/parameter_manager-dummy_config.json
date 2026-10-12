@@ -111,6 +111,10 @@
     "unit": "",
     "value": 2
   },
+  "parameter_manager.corrections.res_spec_vs_gain.min_pass_fraction": {
+    "unit": "",
+    "value": 0.8
+  },
   "parameter_manager.corrections.res_spec_vs_gain.rep_factor": {
     "unit": "",
     "value": 2
@@ -198,10 +202,6 @@
   "parameter_manager.corrections.t2e.max_averaging_increases": {
     "unit": "",
     "value": 2
-  },
-  "parameter_manager.corrections.t2e.max_echos": {
-    "unit": "",
-    "value": 400
   },
   "parameter_manager.corrections.t2e.max_fit_param_error": {
     "unit": "",

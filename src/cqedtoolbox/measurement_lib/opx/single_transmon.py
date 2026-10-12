@@ -462,7 +462,8 @@ def qubit_power_rabi(start, stop, step, n_reps):
     """
     To perform this measurement the qubit element must have an operation 'pi_pulse'.
     """
-    n_amps = abs(round((stop - start) / step))
+    avals = np.arange(start, stop, step)
+    n_amps = avals.size
 
     with program() as qua_measurement:
         i_stream = declare_stream()
@@ -473,10 +474,14 @@ def qubit_power_rabi(start, stop, step, n_reps):
         I = declare(fixed)
         Q = declare(fixed)
         i = declare(int)
+        j = declare(int)
         pulse_amp = declare(fixed)
 
         with for_(i, 0, i < n_reps, i + 1):
-            with for_(pulse_amp, start, pulse_amp < stop, pulse_amp + step):
+            # Count amplitude points with an int so the loop runs exactly n_amps times (the stream buffer size).
+            # Accumulating pulse_amp += step in fixed point can drift below stop and add an extra point.
+            with for_(j, 0, j < n_amps, j + 1):
+                assign(pulse_amp, start + Cast.mul_fixed_by_int(step, j))
                 prepare()
 
                 play(
@@ -771,6 +776,9 @@ def readout_calibration(n_reps):
             assign(k, 1)
             prepare()
             play(f"{options.qubit_element}_pi_pulse", options.qubit_element)
+            # Wait for the pi pulse to finish before reading out; without this the readout started 40 ns
+            # into the pi pulse and the "excited" shots were mostly still in g.
+            align(options.qubit_element, options.readout_element)
             wait(40//4)
             measure_qubit(i, q)
 

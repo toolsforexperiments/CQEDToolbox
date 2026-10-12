@@ -253,6 +253,9 @@ class RecordOPXdata(AsyncRecord):
                     handle = result_handle.get(name)
                     handle.wait_for_values(up_to)
                     data = np.squeeze(handle.fetch(slice(counter, up_to))['value'])
+                    # a 1-rep batch (e.g. the final one) gets its rep axis squeezed away; put it back
+                    if up_to - counter == 1:
+                        data = data[np.newaxis, ...]
                     return data
 
                 for i, ds in enumerate(self.specs):
