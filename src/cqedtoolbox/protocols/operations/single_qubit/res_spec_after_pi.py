@@ -23,7 +23,8 @@ from cqedtoolbox.protocols.parameters import (
     EndReadoutFrequency,
     ReadoutGain,
     ReadoutLength,
-    Detuning,
+    Chi,
+    QubitGain,
     nestedAttributeFromString,
     opx_check_readout_window,
 )
@@ -138,10 +139,11 @@ class ResonatorSpectroscopyAfterPi(ProtocolOperation):
             start_freq=StartReadoutFrequency(params),
             end_freq=EndReadoutFrequency(params),
             readout_gain=ReadoutGain(params),
-            readout_length=ReadoutLength(params)
+            readout_length=ReadoutLength(params),
+            qubit_gain=QubitGain(params),
         )
         self._register_outputs(
-            detuning=Detuning(params)
+            chi=Chi(params)
         )
 
         self._register_correction_params(
@@ -155,7 +157,7 @@ class ResonatorSpectroscopyAfterPi(ProtocolOperation):
         self._register_check("fit_in_range_before", self._check_fit_in_range_before, None)
         self._register_check("fit_in_range_after", self._check_fit_in_range_after, None)
         self._register_check("detuning_check", self._check_detuning, None)
-        self._register_success_update(self.detuning, lambda: self.chi)
+        self._register_success_update(self.chi, lambda: self.measured_chi)
 
         # Data for before measurement
         self.data_loc_before: Path | None = None
@@ -179,8 +181,8 @@ class ResonatorSpectroscopyAfterPi(ProtocolOperation):
         self.fit_problem_after = None
         self.f0_after = None
 
-        # Detuning value
-        self.chi = None
+        # Dispersive-shift value
+        self.measured_chi = None
 
     _SIM_CHI = 2.0  # MHz dispersive shift between ground and excited state
 
@@ -347,12 +349,12 @@ class ResonatorSpectroscopyAfterPi(ProtocolOperation):
             self.figure_paths.append(image_path_after)
 
         # Calculate chi
-        self.chi = self.f0_before - self.f0_after
+        self.measured_chi = self.f0_before - self.f0_after
 
         # Create combined plot
         with DatasetAnalysis(self.data_loc_before, f"{self.name}_combined") as ds:
             fig_combined, ax_combined = plt.subplots()
-            ax_combined.set_title(f"Resonator Spec Before/After Pi (χ = {self.chi:.3f} MHz)")
+            ax_combined.set_title(f"Resonator Spec Before/After Pi (χ = {self.measured_chi:.3f} MHz)")
             ax_combined.set_xlabel("Frequency (MHz)")
             ax_combined.set_ylabel("Signal Magnitude (A.U.)")
 
@@ -433,10 +435,10 @@ class ResonatorSpectroscopyAfterPi(ProtocolOperation):
 
     def _check_detuning(self) -> CheckResult:
         threshold = self.detuning_threshold()
-        passed = abs(self.chi) >= threshold
+        passed = abs(self.measured_chi) >= threshold
         return CheckResult(
             "detuning_check", passed,
-            f"χ={self.chi:.3f} MHz (abs={abs(self.chi):.3f}, threshold={threshold:.3f}); "
+            f"χ={self.measured_chi:.3f} MHz (abs={abs(self.measured_chi):.3f}, threshold={threshold:.3f}); "
             f"f_0 before={self.f0_before:.3f} MHz, f_0 after={self.f0_after:.3f} MHz"
         )
 
@@ -458,7 +460,7 @@ class ResonatorSpectroscopyAfterPi(ProtocolOperation):
         
         # FIXME: units for qick and OPX need to be reconciled here
         self.report_output.append(
-            f"**Detuning (χ): {self.chi:.3f} MHz** "
+            f"**χ: {self.measured_chi:.3f} MHz** "
             f"(f_0 before: {self.f0_before:.3f} MHz, f_0 after: {self.f0_after:.3f} MHz)\n\n"
         )
 

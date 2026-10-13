@@ -170,7 +170,7 @@ class PulseProbeSpectroscopy(AveragerProgramV2):
         self.pulse(ch=q_dac_ch, name='pump_pulse', t=0)
         self.delay_auto(t=0.05, gens=True, ros=False, tag='wait_time')
         self.pulse(ch=ro_dac_ch, name="read_pulse", t=0)
-        self.trigger(ros=[ro_dac_ch], pins=[0], t=cfg['trig_time'])
+        self.trigger(ros=[ro_adc_ch], pins=[0], t=cfg['trig_time'])
 
 
 @QickBoardSweep(

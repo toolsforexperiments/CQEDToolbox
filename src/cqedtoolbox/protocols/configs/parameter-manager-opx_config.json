@@ -147,6 +147,10 @@
     "unit": "",
     "value": 3
   },
+  "parameter_manager.scripts.qubit_tuneup.artificial_detuning": {
+    "unit": "MHz",
+    "value": 0.1
+  },
   "parameter_manager.scripts.qubit_tuneup.pispec_pulselen": {
     "unit": "ns",
     "value": 2400

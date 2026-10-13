@@ -1,7 +1,6 @@
 """
 TODO LIST:
 
-* Detuning word is now being used for both the artificial detuning and chi
 * ROCalibration should store the centers of both g and e states in the parameter manager and have ProtocolParameters for them.
 
 """
@@ -315,17 +314,17 @@ class EndReadoutFrequency(ProtocolParameterBase):
 
 
 @dataclass
-class Detuning(ProtocolParameterBase):
-    name: str = field(default="detuning", init=False)
+class Chi(ProtocolParameterBase):
+    name: str = field(default="chi", init=False)
     description: str = field(default="Dispersive shift (chi) - frequency difference of resonator with qubit in ground vs excited state", init=False)
 
     def _dummy_getter(self):
         active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
-        return nestedAttributeFromString(self.params, f"{active_qubit}.detuning")()
+        return nestedAttributeFromString(self.params, f"{active_qubit}.chi")()
 
     def _dummy_setter(self, value):
         active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
-        return nestedAttributeFromString(self.params, f"{active_qubit}.detuning")(value)
+        return nestedAttributeFromString(self.params, f"{active_qubit}.chi")(value)
 
     def _qick_getter(self):
         active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
@@ -342,6 +341,34 @@ class Detuning(ProtocolParameterBase):
     def _opx_setter(self, value):
         active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
         return nestedAttributeFromString(self.params, f"{active_qubit}.chi")(value)
+
+
+@dataclass
+class ArtificialDetuning(ProtocolParameterBase):
+    name: str = field(default="artificial_detuning", init=False)
+    description: str = field(default="Artificial detuning used to produce T2 Ramsey or echo oscillations", init=False)
+
+    def _dummy_getter(self):
+        active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
+        return nestedAttributeFromString(self.params, f"{active_qubit}.artificial_detuning")()
+
+    def _dummy_setter(self, value):
+        active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
+        return nestedAttributeFromString(self.params, f"{active_qubit}.artificial_detuning")(value)
+
+    def _qick_getter(self):
+        active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
+        return nestedAttributeFromString(self.params, f"{active_qubit}.qubit.detuning")()
+
+    def _qick_setter(self, value):
+        active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
+        return nestedAttributeFromString(self.params, f"{active_qubit}.qubit.detuning")(value)
+
+    def _opx_getter(self):
+        return nestedAttributeFromString(self.params, "scripts.qubit_tuneup.artificial_detuning")()
+
+    def _opx_setter(self, value):
+        return nestedAttributeFromString(self.params, "scripts.qubit_tuneup.artificial_detuning")(value)
 
 
 @dataclass
@@ -734,11 +761,11 @@ class PiSpecSteps(ProtocolParameterBase):
 
     def _qick_getter(self):
         active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
-        return nestedAttributeFromString(self.params, f"{active_qubit}.scripts.pi_spec.steps")()
+        return nestedAttributeFromString(self.params, f"{active_qubit}.scripts.pi_spec.freq_steps")()
 
     def _qick_setter(self, value):
         active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
-        return nestedAttributeFromString(self.params, f"{active_qubit}.scripts.pi_spec.steps")(value)
+        return nestedAttributeFromString(self.params, f"{active_qubit}.scripts.pi_spec.freq_steps")(value)
 
     def _opx_getter(self):
         span = nestedAttributeFromString(self.params, "scripts.qubit_tuneup.qubit_spec_range")()
@@ -855,11 +882,11 @@ class QubitGain(ProtocolParameterBase):
 
     def _qick_getter(self):
         active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
-        return nestedAttributeFromString(self.params, f"{active_qubit}.pulses.pi.gain")()
+        return nestedAttributeFromString(self.params, f"{active_qubit}.pulses.pi.flattop_gain")()
 
     def _qick_setter(self, value):
         active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
-        return nestedAttributeFromString(self.params, f"{active_qubit}.pulses.pi.gain")(value)
+        return nestedAttributeFromString(self.params, f"{active_qubit}.pulses.pi.flattop_gain")(value)
 
     def _opx_getter(self):
         q = nestedAttributeFromString(self.params, "active.qubit")()

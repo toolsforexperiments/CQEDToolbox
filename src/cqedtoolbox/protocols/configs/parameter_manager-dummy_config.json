@@ -251,7 +251,11 @@
     "unit": "us",
     "value": 9.847294302273214
   },
-  "parameter_manager.q01.detuning": {
+  "parameter_manager.q01.artificial_detuning": {
+    "unit": "MHz",
+    "value": 0.5
+  },
+  "parameter_manager.q01.chi": {
     "unit": "MHz",
     "value": 1151.3851404190063
   },

@@ -20,6 +20,7 @@ from labcore.protocols.base import (
 )
 from cqedtoolbox.protocols.parameters import (
     Repetition,
+    ArtificialDetuning,
     T2RSteps,
     QubitGain,
     ReadoutGain,
@@ -143,6 +144,7 @@ class T2ROperation(ProtocolOperation):
         self._register_inputs(
             repetitions=Repetition(params),
             steps=T2RSteps(params),
+            artificial_detuning=ArtificialDetuning(params),
             qubit_gain=QubitGain(params),
             readout_gain=ReadoutGain(params),
             readout_length=ReadoutLength(params),
