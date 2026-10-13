@@ -58,10 +58,6 @@ class QickConfig(QBoardConfig):
             'q_const_phase': getp(params, f"{active_qubit}.pulses.const.phase"),
 
             # Pi pulse
-            'q_pi_shape': getp(params, f"{active_qubit}.pulses.pi.shape"),
-            'q_pi_sigma': getp(params, f"{active_qubit}.pulses.pi.sigma"),
-            'q_pi_n_sigma': getp(params, f"{active_qubit}.pulses.pi.n_sigma"),
-            'q_pi_gain': getp(params, f"{active_qubit}.pulses.pi.gain"),
             'q_pi_phase': getp(params, f"{active_qubit}.pulses.pi.phase"),
 
             # Optional cosine flat-top pi pulse
@@ -86,18 +82,13 @@ class QickConfig(QBoardConfig):
             # Power rabi
             'q_gain_loop_var': QickSweep1D("q_gains_loop", getp(params, f"{active_qubit}.scripts.power_rabi.start_g"), getp(params, f"{active_qubit}.scripts.power_rabi.end_g")),
             'q_gain_steps': getp(params, f"{active_qubit}.scripts.power_rabi.steps"),
-            'amprabi_shape': getp(params, f"{active_qubit}.scripts.power_rabi.shape"),
-            'amprabi_gaussian_sigma': getp(params, f"{active_qubit}.scripts.power_rabi.gaussian_sigma"),
-            'amprabi_gaussian_n_sigma': getp(params, f"{active_qubit}.scripts.power_rabi.gaussian_n_sigma"),
             'amprabi_flattop_ramp': getp(params, f"{active_qubit}.scripts.power_rabi.flattop_ramp"),
             'amprabi_flattop_length': getp(params, f"{active_qubit}.scripts.power_rabi.flattop_length"),
 
             # Time Rabi
-            'timerabi_shape': getp(params, f"{active_qubit}.scripts.time_rabi.shape"),
             'timerabi_flattop_ramp': getp(params, f"{active_qubit}.scripts.time_rabi.flattop_ramp"),
 
             # Time Rabi vs frequency
-            'timerabi_vs_freq_shape': getp(params, f"{active_qubit}.scripts.time_rabi_vs_freq.shape"),
             'timerabi_vs_freq_flattop_ramp': getp(params, f"{active_qubit}.scripts.time_rabi_vs_freq.flattop_ramp"),
 
             # Pi spec

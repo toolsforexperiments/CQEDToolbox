@@ -194,34 +194,19 @@ class TimeRabiProgram(AveragerProgramV2):
         
         # Pump pulse definition
         self.add_loop("timerabi_q_pulse_lens_loop", self.cfg["timerabi_q_pulse_len_steps"])
-        shape = cfg["timerabi_shape"]
-        if shape == "constant":
-            self.add_pulse(ch=q_dac_ch, name="time_rabi_pulse",
-                           style="const",
-                           length=cfg["timerabi_q_pulse_len_loop_var"], # sweep variable
-                           freq=cfg['q_freq'],
-                           phase=cfg['q_pi_phase'],
-                           gain=cfg['timerabi_q_gain'],
-                           )
-        elif shape == "flattop":
-            flattop_ramp = cfg["timerabi_flattop_ramp"]
-            if flattop_ramp is None:
-                raise ValueError("Time Rabi shape 'flattop' requires timerabi_flattop_ramp.")
-            self.add_cosine(ch=q_dac_ch, name="timerabi_flattop_cosine",
-                            length=2 * flattop_ramp, even_length=True)
-            self.add_pulse(ch=q_dac_ch, name="time_rabi_pulse",
-                           style="flat_top",
-                           envelope="timerabi_flattop_cosine",
-                           length=cfg["timerabi_q_pulse_len_loop_var"], # sweep variable
-                           freq=cfg['q_freq'],
-                           phase=cfg['q_pi_phase'],
-                           gain=cfg['timerabi_q_gain'],
-                           )
-        else:
-            raise ValueError(
-                "Time Rabi shape must be 'constant' or 'flattop'; "
-                f"got {shape!r}."
-            )
+        flattop_ramp = cfg["timerabi_flattop_ramp"]
+        if flattop_ramp is None:
+            raise ValueError("Time Rabi requires timerabi_flattop_ramp.")
+        self.add_cosine(ch=q_dac_ch, name="timerabi_flattop_cosine",
+                        length=2 * flattop_ramp, even_length=True)
+        self.add_pulse(ch=q_dac_ch, name="time_rabi_pulse",
+                       style="flat_top",
+                       envelope="timerabi_flattop_cosine",
+                       length=cfg["timerabi_q_pulse_len_loop_var"], # sweep variable
+                       freq=cfg['q_freq'],
+                       phase=cfg['q_pi_phase'],
+                       gain=cfg['timerabi_q_gain'],
+                       )
         
         # Probe pulse definition
         self.add_readoutconfig(ch=ro_adc_ch, name="readout", freq=cfg['ro_freq'], gen_ch=ro_dac_ch)
@@ -270,37 +255,21 @@ class TimeRabiVsFreqProgram(AveragerProgramV2):
         self.add_loop("timerabi_vs_freq_q_freq_loop", self.cfg["timerabi_vs_freq_q_freq_steps"])
         self.add_loop("timerabi_vs_freq_q_pulse_lens_loop", self.cfg["timerabi_vs_freq_q_pulse_len_steps"])
 
-        shape = cfg["timerabi_vs_freq_shape"]
-        if shape == "constant":
-            self.add_pulse(ch=q_dac_ch, name="time_rabi_pulse",
-                           style="const",
-                           length=cfg["timerabi_vs_freq_q_pulse_len_loop_var"], # sweep variable
-                           freq=cfg["timerabi_vs_freq_q_freq_loop_var"], # sweep variable
-                           phase=cfg['q_pi_phase'],
-                           gain=cfg['timerabi_vs_freq_q_gain'],
-                           )
-        elif shape == "flattop":
-            flattop_ramp = cfg["timerabi_vs_freq_flattop_ramp"]
-            if flattop_ramp is None:
-                raise ValueError(
-                    "Time Rabi vs. frequency shape 'flattop' requires "
-                    "timerabi_vs_freq_flattop_ramp."
-                )
-            self.add_cosine(ch=q_dac_ch, name="timerabi_vs_freq_flattop_cosine",
-                            length=2 * flattop_ramp, even_length=True)
-            self.add_pulse(ch=q_dac_ch, name="time_rabi_pulse",
-                           style="flat_top",
-                           envelope="timerabi_vs_freq_flattop_cosine",
-                           length=cfg["timerabi_vs_freq_q_pulse_len_loop_var"], # sweep variable
-                           freq=cfg["timerabi_vs_freq_q_freq_loop_var"], # sweep variable
-                           phase=cfg['q_pi_phase'],
-                           gain=cfg['timerabi_vs_freq_q_gain'],
-                           )
-        else:
+        flattop_ramp = cfg["timerabi_vs_freq_flattop_ramp"]
+        if flattop_ramp is None:
             raise ValueError(
-                "Time Rabi vs. frequency shape must be 'constant' or 'flattop'; "
-                f"got {shape!r}."
+                "Time Rabi vs. frequency requires timerabi_vs_freq_flattop_ramp."
             )
+        self.add_cosine(ch=q_dac_ch, name="timerabi_vs_freq_flattop_cosine",
+                        length=2 * flattop_ramp, even_length=True)
+        self.add_pulse(ch=q_dac_ch, name="time_rabi_pulse",
+                       style="flat_top",
+                       envelope="timerabi_vs_freq_flattop_cosine",
+                       length=cfg["timerabi_vs_freq_q_pulse_len_loop_var"], # sweep variable
+                       freq=cfg["timerabi_vs_freq_q_freq_loop_var"], # sweep variable
+                       phase=cfg['q_pi_phase'],
+                       gain=cfg['timerabi_vs_freq_q_gain'],
+                       )
         
         # Probe pulse definition
         self.add_readoutconfig(ch=ro_adc_ch, name="readout", freq=cfg['ro_freq'], gen_ch=ro_dac_ch)
@@ -404,47 +373,23 @@ class AmplitudeRabiProgram(AveragerProgramV2):
         
         # Pump pulse definition
         self.add_loop("q_gains_loop", self.cfg["q_gain_steps"])
-        shape = cfg["amprabi_shape"]
-        if shape == "gaussian":
-            sigma = cfg["amprabi_gaussian_sigma"]
-            n_sigma = cfg["amprabi_gaussian_n_sigma"]
-            if sigma is None or n_sigma is None:
-                raise ValueError(
-                    "Amplitude Rabi shape 'gaussian' requires "
-                    "amprabi_gaussian_sigma and amprabi_gaussian_n_sigma."
-                )
-            self.add_gauss(ch=q_dac_ch, name="amprabi_gauss", sigma=sigma,
-                           length=n_sigma * sigma, even_length=True)
-            self.add_pulse(ch=q_dac_ch, name="pi_pulse",
-                           style="arb",
-                           envelope="amprabi_gauss",
-                           freq=cfg['q_freq'],
-                           phase=cfg['q_pi_phase'],
-                           gain=cfg['q_gain_loop_var'],  # Sweep variable
-                           )
-        elif shape == "flattop":
-            flattop_ramp = cfg["amprabi_flattop_ramp"]
-            flattop_length = cfg["amprabi_flattop_length"]
-            if flattop_ramp is None or flattop_length is None:
-                raise ValueError(
-                    "Amplitude Rabi shape 'flattop' requires "
-                    "amprabi_flattop_ramp and amprabi_flattop_length."
-                )
-            self.add_cosine(ch=q_dac_ch, name="amprabi_flattop_cosine",
-                            length=2 * flattop_ramp, even_length=True)
-            self.add_pulse(ch=q_dac_ch, name="pi_pulse",
-                           style="flat_top",
-                           envelope="amprabi_flattop_cosine",
-                           length=flattop_length,
-                           freq=cfg['q_freq'],
-                           phase=cfg['q_pi_phase'],
-                           gain=cfg['q_gain_loop_var'],  # Sweep variable
-                           )
-        else:
+        flattop_ramp = cfg["amprabi_flattop_ramp"]
+        flattop_length = cfg["amprabi_flattop_length"]
+        if flattop_ramp is None or flattop_length is None:
             raise ValueError(
-                "Amplitude Rabi shape must be 'gaussian' or 'flattop'; "
-                f"got {shape!r}."
+                "Amplitude Rabi requires amprabi_flattop_ramp and "
+                "amprabi_flattop_length."
             )
+        self.add_cosine(ch=q_dac_ch, name="amprabi_flattop_cosine",
+                        length=2 * flattop_ramp, even_length=True)
+        self.add_pulse(ch=q_dac_ch, name="pi_pulse",
+                       style="flat_top",
+                       envelope="amprabi_flattop_cosine",
+                       length=flattop_length,
+                       freq=cfg['q_freq'],
+                       phase=cfg['q_pi_phase'],
+                       gain=cfg['q_gain_loop_var'],  # Sweep variable
+                       )
         
         # Probe pulse definition
         self.add_readoutconfig(ch=ro_adc_ch, name="readout", freq=cfg['ro_freq'], gen_ch=ro_dac_ch)
@@ -488,48 +433,24 @@ class PiSpecProgram(AveragerProgramV2):
 
         # Pump pulse definition
         self.add_loop("pi_spec_freqs_loop", self.cfg["pi_spec_freq_steps"])
-        shape = cfg["q_pi_shape"]
-        if shape == "gaussian":
-            self.add_gauss(ch=q_dac_ch, name="gauss", sigma=cfg['q_pi_sigma'], length=cfg['q_pi_n_sigma']*cfg['q_pi_sigma'], even_length=True)
-            self.add_pulse(ch=q_dac_ch, name="pi_pulse",
-                           style="arb",
-                           envelope="gauss",
-                           freq=cfg['pi_spec_freq_loop_var'],  # Sweep variable
-                           phase=cfg['q_pi_phase'],
-                           gain=cfg['q_pi_gain'],
-                          )
-        elif shape == "constant":
-            self.add_pulse(ch=q_dac_ch, name="pi_pulse",
-                           style="const",
-                           length=cfg['q_const_len'],
-                           freq=cfg['pi_spec_freq_loop_var'],
-                           phase=cfg['q_const_phase'],
-                           gain=cfg['q_const_gain'],
-                          )
-        elif shape == "flattop":
-            flattop_ramp = cfg["q_pi_flattop_ramp"]
-            flattop_length = cfg["q_pi_flattop_length"]
-            flattop_gain = cfg["q_pi_flattop_gain"]
-            if None in (flattop_ramp, flattop_length, flattop_gain):
-                raise ValueError(
-                    "Pi spectroscopy shape 'flattop' requires q_pi_flattop_ramp, "
-                    "q_pi_flattop_length, and q_pi_flattop_gain."
-                )
-            self.add_cosine(ch=q_dac_ch, name="pi_spec_flattop_cosine",
-                            length=2 * flattop_ramp, even_length=True)
-            self.add_pulse(ch=q_dac_ch, name="pi_pulse",
-                           style="flat_top",
-                           envelope="pi_spec_flattop_cosine",
-                           length=flattop_length,
-                           freq=cfg['pi_spec_freq_loop_var'],  # Sweep variable
-                           phase=cfg['q_pi_phase'],
-                           gain=flattop_gain,
-                          )
-        else:
+        flattop_ramp = cfg["q_pi_flattop_ramp"]
+        flattop_length = cfg["q_pi_flattop_length"]
+        flattop_gain = cfg["q_pi_flattop_gain"]
+        if None in (flattop_ramp, flattop_length, flattop_gain):
             raise ValueError(
-                "Pi spectroscopy shape must be 'gaussian', 'constant', or 'flattop'; "
-                f"got {shape!r}."
+                "Pi spectroscopy requires q_pi_flattop_ramp, q_pi_flattop_length, "
+                "and q_pi_flattop_gain."
             )
+        self.add_cosine(ch=q_dac_ch, name="pi_spec_flattop_cosine",
+                        length=2 * flattop_ramp, even_length=True)
+        self.add_pulse(ch=q_dac_ch, name="pi_pulse",
+                       style="flat_top",
+                       envelope="pi_spec_flattop_cosine",
+                       length=flattop_length,
+                       freq=cfg['pi_spec_freq_loop_var'],  # Sweep variable
+                       phase=cfg['q_pi_phase'],
+                       gain=flattop_gain,
+                      )
 
         # Probe pulse definition
         self.add_readoutconfig(ch=ro_adc_ch, name="readout", freq=cfg['ro_freq'], gen_ch=ro_dac_ch)
@@ -574,35 +495,19 @@ class ResProbeProgram(AveragerProgramV2):
 
         self.add_loop("ro_freqs_loop", self.cfg["ro_freq_steps"])
 
-        shape = cfg["q_pi_shape"]
-        if shape == "gaussian":
-            self.add_gauss(ch=q_dac_ch, name="gauss", sigma=cfg['q_pi_sigma'], length=cfg['q_pi_n_sigma'] * cfg['q_pi_sigma'], even_length=True)
-            self.add_pulse(ch=q_dac_ch, name="pi_pulse",
-                           style="arb", envelope="gauss", freq=cfg['q_freq'],
-                           phase=cfg['q_pi_phase'], gain=cfg['q_pi_gain'])
-        elif shape == "constant":
-            self.add_pulse(ch=q_dac_ch, name="pi_pulse", style="const",
-                           length=cfg['q_const_len'], freq=cfg['q_freq'],
-                           phase=cfg['q_const_phase'], gain=cfg['q_const_gain'])
-        elif shape == "flattop":
-            flattop_ramp = cfg["q_pi_flattop_ramp"]
-            flattop_length = cfg["q_pi_flattop_length"]
-            flattop_gain = cfg["q_pi_flattop_gain"]
-            if None in (flattop_ramp, flattop_length, flattop_gain):
-                raise ValueError(
-                    "Resonator probe shape 'flattop' requires q_pi_flattop_ramp, "
-                    "q_pi_flattop_length, and q_pi_flattop_gain."
-                )
-            self.add_cosine(ch=q_dac_ch, name="resprobe_flattop_cosine",
-                            length=2 * flattop_ramp, even_length=True)
-            self.add_pulse(ch=q_dac_ch, name="pi_pulse", style="flat_top",
-                           envelope="resprobe_flattop_cosine", length=flattop_length,
-                           freq=cfg['q_freq'], phase=cfg['q_pi_phase'], gain=flattop_gain)
-        else:
+        flattop_ramp = cfg["q_pi_flattop_ramp"]
+        flattop_length = cfg["q_pi_flattop_length"]
+        flattop_gain = cfg["q_pi_flattop_gain"]
+        if None in (flattop_ramp, flattop_length, flattop_gain):
             raise ValueError(
-                "Resonator probe shape must be 'gaussian', 'constant', or 'flattop'; "
-                f"got {shape!r}."
+                "Resonator probe requires q_pi_flattop_ramp, q_pi_flattop_length, "
+                "and q_pi_flattop_gain."
             )
+        self.add_cosine(ch=q_dac_ch, name="resprobe_flattop_cosine",
+                        length=2 * flattop_ramp, even_length=True)
+        self.add_pulse(ch=q_dac_ch, name="pi_pulse", style="flat_top",
+                       envelope="resprobe_flattop_cosine", length=flattop_length,
+                       freq=cfg['q_freq'], phase=cfg['q_pi_phase'], gain=flattop_gain)
         self.add_readoutconfig(ch=ro_adc_ch, name="readout", freq=cfg['ro_freq_loop_var'], gen_ch=ro_dac_ch)
 
         self.add_pulse(ch=ro_dac_ch, name="probe_pulse", ro_ch=ro_adc_ch,
@@ -648,44 +553,24 @@ class T1Program(AveragerProgramV2):
         self.add_loop("t1_wait_time_loop", self.cfg["t1_steps"])
 
         # Pump pulse definition
-        shape = cfg["q_pi_shape"]
-        if shape == "gaussian":
-            self.add_gauss(ch=q_dac_ch, name="gauss", sigma=cfg['q_pi_sigma'], length=cfg['q_pi_n_sigma']*cfg['q_pi_sigma'], even_length=True)
-            self.add_pulse(ch=q_dac_ch, name="pi_pulse",
-                           style="arb",
-                           envelope="gauss",
-                           freq=cfg['q_freq'],
-                           phase=cfg['q_pi_phase'],
-                           gain=cfg['q_pi_gain'],
-                          )
-        elif shape == "constant":
-            self.add_pulse(ch=q_dac_ch, name="pi_pulse", style="const",
-                           length=cfg['q_const_len'], freq=cfg['q_freq'],
-                           phase=cfg['q_const_phase'], gain=cfg['q_const_gain'])
-        elif shape == "flattop":
-            flattop_ramp = cfg["q_pi_flattop_ramp"]
-            flattop_length = cfg["q_pi_flattop_length"]
-            flattop_gain = cfg["q_pi_flattop_gain"]
-            if None in (flattop_ramp, flattop_length, flattop_gain):
-                raise ValueError(
-                    "T1 shape 'flattop' requires q_pi_flattop_ramp, "
-                    "q_pi_flattop_length, and q_pi_flattop_gain."
-                )
-            self.add_cosine(ch=q_dac_ch, name="t1_flattop_cosine",
-                            length=2 * flattop_ramp, even_length=True)
-            self.add_pulse(ch=q_dac_ch, name="pi_pulse",
-                           style="flat_top",
-                           envelope="t1_flattop_cosine",
-                           length=flattop_length,
-                           freq=cfg['q_freq'],
-                           phase=cfg['q_pi_phase'],
-                           gain=flattop_gain,
-                          )
-        else:
+        flattop_ramp = cfg["q_pi_flattop_ramp"]
+        flattop_length = cfg["q_pi_flattop_length"]
+        flattop_gain = cfg["q_pi_flattop_gain"]
+        if None in (flattop_ramp, flattop_length, flattop_gain):
             raise ValueError(
-                "T1 shape must be 'gaussian', 'constant', or 'flattop'; "
-                f"got {shape!r}."
+                "T1 requires q_pi_flattop_ramp, q_pi_flattop_length, and "
+                "q_pi_flattop_gain."
             )
+        self.add_cosine(ch=q_dac_ch, name="t1_flattop_cosine",
+                        length=2 * flattop_ramp, even_length=True)
+        self.add_pulse(ch=q_dac_ch, name="pi_pulse",
+                       style="flat_top",
+                       envelope="t1_flattop_cosine",
+                       length=flattop_length,
+                       freq=cfg['q_freq'],
+                       phase=cfg['q_pi_phase'],
+                       gain=flattop_gain,
+                      )
 
         # Probe pulse definition
         self.add_readoutconfig(ch=ro_adc_ch, name="readout", freq=cfg['ro_freq'], gen_ch=ro_dac_ch)
@@ -734,65 +619,32 @@ class T2RProgram(AveragerProgramV2):
         self.add_loop("t2r_wait_time_loop", self.cfg["t2r_steps"])
 
         # Pump pulse definition
-        shape = cfg["q_pi_shape"]
-        if shape == "gaussian":
-            self.add_gauss(ch=q_dac_ch, name="gauss", sigma=cfg['q_pi_sigma'], length=cfg['q_pi_n_sigma']*cfg['q_pi_sigma'], even_length=True)
-            ## pi/2 pulse
-            self.add_pulse(ch=q_dac_ch, name="pi_2_pulse",
-                           style="arb",
-                           envelope="gauss",
-                           freq=cfg['q_freq'],
-                           phase=cfg['q_pi_phase'],
-                           gain=cfg['q_pi_gain']/2,
-                          )
-
-            self.add_pulse(ch=q_dac_ch, name="pi_2_detuned_pulse",
-                           style="arb",
-                           envelope="gauss",
-                           freq=cfg['q_freq'],
-                           phase=cfg['t2r_wait_time_loop_var']*cfg['q_detuning']*360,  # Artificial detuning for observation of Ramsey oscillation
-                           gain=cfg['q_pi_gain']/2,
-                          )
-        elif shape == "constant":
-            self.add_pulse(ch=q_dac_ch, name="pi_2_pulse", style="const",
-                           length=cfg['q_const_len'], freq=cfg['q_freq'],
-                           phase=cfg['q_const_phase'], gain=cfg['q_const_gain'] / 2)
-            self.add_pulse(ch=q_dac_ch, name="pi_2_detuned_pulse", style="const",
-                           length=cfg['q_const_len'], freq=cfg['q_freq'],
-                           phase=cfg['t2r_wait_time_loop_var'] * cfg['q_detuning'] * 360,
-                           gain=cfg['q_const_gain'] / 2)
-        elif shape == "flattop":
-            flattop_ramp = cfg["q_pi_flattop_ramp"]
-            flattop_length = cfg["q_pi_flattop_length"]
-            flattop_gain = cfg["q_pi_flattop_gain"]
-            if None in (flattop_ramp, flattop_length, flattop_gain):
-                raise ValueError(
-                    "T2 Ramsey shape 'flattop' requires q_pi_flattop_ramp, "
-                    "q_pi_flattop_length, and q_pi_flattop_gain."
-                )
-            self.add_cosine(ch=q_dac_ch, name="t2r_flattop_cosine",
-                            length=2 * flattop_ramp, even_length=True)
-            self.add_pulse(ch=q_dac_ch, name="pi_2_pulse",
-                           style="flat_top",
-                           envelope="t2r_flattop_cosine",
-                           length=flattop_length,
-                           freq=cfg['q_freq'],
-                           phase=cfg['q_pi_phase'],
-                           gain=flattop_gain/2,
-                          )
-            self.add_pulse(ch=q_dac_ch, name="pi_2_detuned_pulse",
-                           style="flat_top",
-                           envelope="t2r_flattop_cosine",
-                           length=flattop_length,
-                           freq=cfg['q_freq'],
-                           phase=cfg['t2r_wait_time_loop_var']*cfg['q_detuning']*360,  # Artificial detuning for observation of Ramsey oscillation
-                           gain=flattop_gain/2,
-                          )
-        else:
+        flattop_ramp = cfg["q_pi_flattop_ramp"]
+        flattop_length = cfg["q_pi_flattop_length"]
+        flattop_gain = cfg["q_pi_flattop_gain"]
+        if None in (flattop_ramp, flattop_length, flattop_gain):
             raise ValueError(
-                "T2 Ramsey shape must be 'gaussian', 'constant', or 'flattop'; "
-                f"got {shape!r}."
+                "T2 Ramsey requires q_pi_flattop_ramp, q_pi_flattop_length, "
+                "and q_pi_flattop_gain."
             )
+        self.add_cosine(ch=q_dac_ch, name="t2r_flattop_cosine",
+                        length=2 * flattop_ramp, even_length=True)
+        self.add_pulse(ch=q_dac_ch, name="pi_2_pulse",
+                       style="flat_top",
+                       envelope="t2r_flattop_cosine",
+                       length=flattop_length,
+                       freq=cfg['q_freq'],
+                       phase=cfg['q_pi_phase'],
+                       gain=flattop_gain/2,
+                      )
+        self.add_pulse(ch=q_dac_ch, name="pi_2_detuned_pulse",
+                       style="flat_top",
+                       envelope="t2r_flattop_cosine",
+                       length=flattop_length,
+                       freq=cfg['q_freq'],
+                       phase=cfg['t2r_wait_time_loop_var']*cfg['q_detuning']*360,
+                       gain=flattop_gain/2,
+                      )
 
         # Probe pulse
         self.add_readoutconfig(ch=ro_adc_ch, name="readout", freq=cfg['ro_freq'], gen_ch=ro_dac_ch)
@@ -848,84 +700,40 @@ class T2nProgram(AveragerProgramV2):
         self.add_loop("t2e_wait_time_loop", self.cfg["t2e_steps"])
 
         # Pump pulse definition
-        shape = cfg["q_pi_shape"]
-        if shape == "gaussian":
-            self.add_gauss(ch=q_dac_ch, name="gauss", sigma=cfg['q_pi_sigma'], length=cfg['q_pi_n_sigma']*cfg['q_pi_sigma'], even_length=True)
-            ## pi/2 pulse
-            self.add_pulse(ch=q_dac_ch, name="pi_2_pulse",
-                           style="arb",
-                           envelope="gauss",
-                           freq=cfg['q_freq'],
-                           phase=cfg['q_pi_phase'],
-                           gain=cfg['q_pi_gain']/2,
-                          )
-
-            self.add_pulse(ch=q_dac_ch, name="pi_2_detuned_pulse",
-                           style="arb",
-                           envelope="gauss",
-                           freq=cfg['q_freq'],
-                           phase=cfg['t2e_wait_time_loop_var']*cfg['q_detuning']*360,
-                           gain=cfg['q_pi_gain']/2,
-                          )
-            ## pi pulse
-            self.add_pulse(ch=q_dac_ch, name="pi_pulse",
-                           style="arb",
-                           envelope="gauss",
-                           freq=cfg['q_freq'],
-                           phase=cfg['q_pi_phase'],
-                           gain=cfg['q_pi_gain'],
-                          )
-        elif shape == "constant":
-            self.add_pulse(ch=q_dac_ch, name="pi_2_pulse", style="const",
-                           length=cfg['q_const_len'], freq=cfg['q_freq'],
-                           phase=cfg['q_const_phase'], gain=cfg['q_const_gain'] / 2)
-            self.add_pulse(ch=q_dac_ch, name="pi_2_detuned_pulse", style="const",
-                           length=cfg['q_const_len'], freq=cfg['q_freq'],
-                           phase=cfg['t2e_wait_time_loop_var'] * cfg['q_detuning'] * 360,
-                           gain=cfg['q_const_gain'] / 2)
-            self.add_pulse(ch=q_dac_ch, name="pi_pulse", style="const",
-                           length=cfg['q_const_len'], freq=cfg['q_freq'],
-                           phase=cfg['q_const_phase'], gain=cfg['q_const_gain'])
-        elif shape == "flattop":
-            flattop_ramp = cfg["q_pi_flattop_ramp"]
-            flattop_length = cfg["q_pi_flattop_length"]
-            flattop_gain = cfg["q_pi_flattop_gain"]
-            if None in (flattop_ramp, flattop_length, flattop_gain):
-                raise ValueError(
-                    "T2 echo shape 'flattop' requires q_pi_flattop_ramp, "
-                    "q_pi_flattop_length, and q_pi_flattop_gain."
-                )
-            self.add_cosine(ch=q_dac_ch, name="t2n_flattop_cosine",
-                            length=2 * flattop_ramp, even_length=True)
-            self.add_pulse(ch=q_dac_ch, name="pi_2_pulse",
-                           style="flat_top",
-                           envelope="t2n_flattop_cosine",
-                           length=flattop_length,
-                           freq=cfg['q_freq'],
-                           phase=cfg['q_pi_phase'],
-                           gain=flattop_gain/2,
-                          )
-            self.add_pulse(ch=q_dac_ch, name="pi_2_detuned_pulse",
-                           style="flat_top",
-                           envelope="t2n_flattop_cosine",
-                           length=flattop_length,
-                           freq=cfg['q_freq'],
-                           phase=cfg['t2e_wait_time_loop_var']*cfg['q_detuning']*360,
-                           gain=flattop_gain/2,
-                          )
-            self.add_pulse(ch=q_dac_ch, name="pi_pulse",
-                           style="flat_top",
-                           envelope="t2n_flattop_cosine",
-                           length=flattop_length,
-                           freq=cfg['q_freq'],
-                           phase=cfg['q_pi_phase'],
-                           gain=flattop_gain,
-                          )
-        else:
+        flattop_ramp = cfg["q_pi_flattop_ramp"]
+        flattop_length = cfg["q_pi_flattop_length"]
+        flattop_gain = cfg["q_pi_flattop_gain"]
+        if None in (flattop_ramp, flattop_length, flattop_gain):
             raise ValueError(
-                "T2 echo shape must be 'gaussian', 'constant', or 'flattop'; "
-                f"got {shape!r}."
+                "T2 echo requires q_pi_flattop_ramp, q_pi_flattop_length, "
+                "and q_pi_flattop_gain."
             )
+        self.add_cosine(ch=q_dac_ch, name="t2n_flattop_cosine",
+                        length=2 * flattop_ramp, even_length=True)
+        self.add_pulse(ch=q_dac_ch, name="pi_2_pulse",
+                       style="flat_top",
+                       envelope="t2n_flattop_cosine",
+                       length=flattop_length,
+                       freq=cfg['q_freq'],
+                       phase=cfg['q_pi_phase'],
+                       gain=flattop_gain/2,
+                      )
+        self.add_pulse(ch=q_dac_ch, name="pi_2_detuned_pulse",
+                       style="flat_top",
+                       envelope="t2n_flattop_cosine",
+                       length=flattop_length,
+                       freq=cfg['q_freq'],
+                       phase=cfg['t2e_wait_time_loop_var']*cfg['q_detuning']*360,
+                       gain=flattop_gain/2,
+                      )
+        self.add_pulse(ch=q_dac_ch, name="pi_pulse",
+                       style="flat_top",
+                       envelope="t2n_flattop_cosine",
+                       length=flattop_length,
+                       freq=cfg['q_freq'],
+                       phase=cfg['q_pi_phase'],
+                       gain=flattop_gain,
+                      )
 
         self.add_readoutconfig(ch=ro_adc_ch, name="readout", freq=cfg['ro_freq'], gen_ch=ro_dac_ch)
         self.add_pulse(ch=ro_dac_ch, name="read_pulse", ro_ch=ro_adc_ch,
@@ -1027,37 +835,19 @@ class SingleShotExcitedProgram(AveragerProgramV2):
         self.declare_readout(ch=ro_adc_ch, length=cfg['ro_len'])
 
         self.add_loop("shot_loop", cfg['steps'])
-        shape = cfg["q_pi_shape"]
-        if shape == "gaussian":
-            self.add_gauss(ch=q_dac_ch, name="gauss", sigma=cfg['q_pi_sigma'],
-                           length=cfg['q_pi_n_sigma'] * cfg['q_pi_sigma'],
-                           even_length=True)
-            self.add_pulse(ch=q_dac_ch, name="pi_pulse", style="arb",
-                           envelope="gauss", freq=cfg['q_freq'],
-                           phase=cfg['q_pi_phase'], gain=cfg['q_pi_gain'])
-        elif shape == "constant":
-            self.add_pulse(ch=q_dac_ch, name="pi_pulse", style="const",
-                           length=cfg['q_const_len'], freq=cfg['q_freq'],
-                           phase=cfg['q_const_phase'], gain=cfg['q_const_gain'])
-        elif shape == "flattop":
-            flattop_ramp = cfg["q_pi_flattop_ramp"]
-            flattop_length = cfg["q_pi_flattop_length"]
-            flattop_gain = cfg["q_pi_flattop_gain"]
-            if None in (flattop_ramp, flattop_length, flattop_gain):
-                raise ValueError(
-                    "Single-shot excited shape 'flattop' requires q_pi_flattop_ramp, "
-                    "q_pi_flattop_length, and q_pi_flattop_gain."
-                )
-            self.add_cosine(ch=q_dac_ch, name="single_shot_flattop_cosine",
-                            length=2 * flattop_ramp, even_length=True)
-            self.add_pulse(ch=q_dac_ch, name="pi_pulse", style="flat_top",
-                           envelope="single_shot_flattop_cosine", length=flattop_length,
-                           freq=cfg['q_freq'], phase=cfg['q_pi_phase'], gain=flattop_gain)
-        else:
+        flattop_ramp = cfg["q_pi_flattop_ramp"]
+        flattop_length = cfg["q_pi_flattop_length"]
+        flattop_gain = cfg["q_pi_flattop_gain"]
+        if None in (flattop_ramp, flattop_length, flattop_gain):
             raise ValueError(
-                "Single-shot excited shape must be 'gaussian', 'constant', or "
-                f"'flattop'; got {shape!r}."
+                "Single-shot excited requires q_pi_flattop_ramp, "
+                "q_pi_flattop_length, and q_pi_flattop_gain."
             )
+        self.add_cosine(ch=q_dac_ch, name="single_shot_flattop_cosine",
+                        length=2 * flattop_ramp, even_length=True)
+        self.add_pulse(ch=q_dac_ch, name="pi_pulse", style="flat_top",
+                       envelope="single_shot_flattop_cosine", length=flattop_length,
+                       freq=cfg['q_freq'], phase=cfg['q_pi_phase'], gain=flattop_gain)
 
         self.add_readoutconfig(ch=ro_adc_ch, name="readout", freq=cfg['ro_freq'], gen_ch=ro_dac_ch)
         self.add_pulse(ch=ro_dac_ch, name="read_pulse", ro_ch=ro_adc_ch,
