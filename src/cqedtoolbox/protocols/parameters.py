@@ -882,11 +882,11 @@ class QubitGain(ProtocolParameterBase):
 
     def _qick_getter(self):
         active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
-        return nestedAttributeFromString(self.params, f"{active_qubit}.pulses.pi.gain")()
+        return nestedAttributeFromString(self.params, f"{active_qubit}.pulses.pi.flattop_gain")()
 
     def _qick_setter(self, value):
         active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
-        return nestedAttributeFromString(self.params, f"{active_qubit}.pulses.pi.gain")(value)
+        return nestedAttributeFromString(self.params, f"{active_qubit}.pulses.pi.flattop_gain")(value)
 
     def _opx_getter(self):
         q = nestedAttributeFromString(self.params, "active.qubit")()

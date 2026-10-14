@@ -63,7 +63,7 @@ class QickConfig(QBoardConfig):
             # Optional cosine flat-top pi pulse
             'q_pi_flattop_ramp': getp(params, f"{active_qubit}.pulses.pi.flattop_ramp"),
             'q_pi_flattop_length': getp(params, f"{active_qubit}.pulses.pi.flattop_length"),
-            'q_pi_flattop_gain': getp(params, f"{active_qubit}.pulses.pi.gain"),
+            'q_pi_flattop_gain': getp(params, f"{active_qubit}.pulses.pi.flattop_gain"),
 
             # Measurements
 
