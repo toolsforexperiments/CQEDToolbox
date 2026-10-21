@@ -43,7 +43,7 @@ class OffsetProgram(AveragerProgramV2):
 
         
 @QickBoardSweep(
-    PulseVariable('freq', pulse_parameter="probe_pulse", sweep_parameter="freq"),
+    PulseVariable('freq', pulse_parameter="probe_pulse", sweep_parameter="freq", unit="MHz"),
     ComplexQICKData('signal', depends_on=['freq'])
 )
 class FreqSweepProgram(AveragerProgramV2):
@@ -80,7 +80,7 @@ class FreqSweepProgram(AveragerProgramV2):
 
 
 @QickBoardSweep(
-    PulseVariable('freq', pulse_parameter="probe_pulse", sweep_parameter="freq"),
+    PulseVariable('freq', pulse_parameter="probe_pulse", sweep_parameter="freq", unit="MHz"),
     PulseVariable('gain', pulse_parameter="probe_pulse", sweep_parameter="gain"),
     ComplexQICKData('signal', depends_on=['freq', 'gain'])
 )
@@ -120,7 +120,7 @@ class FreqGainSweepProgram(AveragerProgramV2):
 
 
 @QickBoardSweep(
-    PulseVariable('freq', pulse_parameter="pump_pulse", sweep_parameter="freq"),
+    PulseVariable('freq', pulse_parameter="pump_pulse", sweep_parameter="freq", unit="MHz"),
     ComplexQICKData('signal', depends_on=['freq'])
 )
 class PulseProbeSpectroscopy(AveragerProgramV2):
@@ -174,7 +174,7 @@ class PulseProbeSpectroscopy(AveragerProgramV2):
 
 
 @QickBoardSweep(
-    PulseVariable("time", pulse_parameter="time_rabi_pulse", sweep_parameter="length"),
+    PulseVariable("time", pulse_parameter="time_rabi_pulse", sweep_parameter="length", unit="us"),
     ComplexQICKData("signal", depends_on=["time"]),
 )
 class TimeRabiProgram(AveragerProgramV2):
@@ -232,8 +232,8 @@ class TimeRabiProgram(AveragerProgramV2):
 
 
 @QickBoardSweep(
-    PulseVariable("time", pulse_parameter="time_rabi_pulse", sweep_parameter="length"),
-    PulseVariable("freq", pulse_parameter="time_rabi_pulse", sweep_parameter="freq"),
+    PulseVariable("time", pulse_parameter="time_rabi_pulse", sweep_parameter="length", unit="us"),
+    PulseVariable("freq", pulse_parameter="time_rabi_pulse", sweep_parameter="freq", unit="MHz"),
     ComplexQICKData("signal", depends_on=["time", "freq"]),
 )
 class TimeRabiVsFreqProgram(AveragerProgramV2):
@@ -295,7 +295,7 @@ class TimeRabiVsFreqProgram(AveragerProgramV2):
 
 
 @QickBoardSweep(
-    PulseVariable('freq', pulse_parameter="pump_pulse", sweep_parameter="freq"),
+    PulseVariable('freq', pulse_parameter="pump_pulse", sweep_parameter="freq", unit="MHz"),
     ComplexQICKData('signal', depends_on=['freq'])
 )
 class TwoToneSpectroscopy(AveragerProgramV2):
@@ -415,7 +415,7 @@ class AmplitudeRabiProgram(AveragerProgramV2):
 
 
 @QickBoardSweep(
-    PulseVariable("freq", pulse_parameter='pi_pulse', sweep_parameter="freq"),
+    PulseVariable("freq", pulse_parameter='pi_pulse', sweep_parameter="freq", unit="MHz"),
     ComplexQICKData("signal", depends_on=["freq"])
 )
 class PiSpecProgram(AveragerProgramV2):
@@ -476,7 +476,7 @@ class PiSpecProgram(AveragerProgramV2):
 
 
 @QickBoardSweep(
-    PulseVariable("freq", pulse_parameter="probe_pulse", sweep_parameter="freq"),
+    PulseVariable("freq", pulse_parameter="probe_pulse", sweep_parameter="freq", unit="MHz"),
     ComplexQICKData("signal", depends_on=["freq"])
 )
 class ResProbeProgram(AveragerProgramV2):
@@ -532,7 +532,7 @@ class ResProbeProgram(AveragerProgramV2):
 
 
 @QickBoardSweep(
-    TimeVariable("t", time_parameter='wait_time'),
+    TimeVariable("t", time_parameter='wait_time', unit="us"),
     ComplexQICKData("signal", depends_on=["t"])
 )
 class T1Program(AveragerProgramV2):
@@ -597,7 +597,7 @@ class T1Program(AveragerProgramV2):
 
 
 @QickBoardSweep(
-    TimeVariable("t", time_parameter='wait_time'),
+    TimeVariable("t", time_parameter='wait_time', unit="us"),
     ComplexQICKData("signal", depends_on=["t"])
 )
 class T2RProgram(AveragerProgramV2):
@@ -678,7 +678,7 @@ class T2RProgram(AveragerProgramV2):
 
 
 @QickBoardSweep(
-    TimeVariable("t", time_parameter="wait_time"),
+    TimeVariable("t", time_parameter="wait_time", unit="us"),
     ComplexQICKData("signal", depends_on=["t"])
 )
 class T2nProgram(AveragerProgramV2):
