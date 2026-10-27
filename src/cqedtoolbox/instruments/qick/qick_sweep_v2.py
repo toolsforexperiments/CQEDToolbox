@@ -39,7 +39,6 @@ class ComplexQICKData(DataSpec):
     i_data_stream: str = 'I'
     q_data_stream: str = 'Q'
 
-
 @dataclass
 class PulseVariable(DataSpec):
     pulse_parameter: str = None
@@ -49,6 +48,13 @@ class PulseVariable(DataSpec):
 class TimeVariable(DataSpec):
     time_parameter: str = None
 
+@dataclass
+class DecimatedVariable(DataSpec):
+    ro_index: int = None
+
+@dataclass
+class SuperDecimatedVariable(DataSpec):
+    tlist: str = None
 
 
 class QickBoardSweep(AsyncRecord):
@@ -61,7 +67,23 @@ class QickBoardSweep(AsyncRecord):
         """
         self.communicator = {}
         self.specs = []
+        self.decimated_flag = False
+        self.superdecimated_flag = False
+
         for s in specs:
+            # Checks the presence of decimated or superdecimated readout.
+            # Note that only one decimated or superdecimated readout is supported.
+            if isinstance(s, DecimatedVariable):
+                if self.decimated_flag is True or self.superdecimated_flag is True:
+                    raise ValueError("Only decimated or super-decimated RO allowed.")
+                else:
+                    self.decimated_flag = True
+            elif isinstance(s, SuperDecimatedVariable):
+                if self.decimated_flag is True or self.superdecimated_flag is True:
+                    raise ValueError("Only decimated or super-decimated RO allowed.")
+                else:
+                    self.superdecimated_flag = True
+
             spec = make_data_spec(s)
             self.specs.append(spec)
 
@@ -88,11 +110,25 @@ class QickBoardSweep(AsyncRecord):
         * Given DataSpecs are either independent, dependent, or ComplexQICKData.
         """
         # TODO: How can I extend this to multiple measurement rounds? (e.g. active reset)
+        # TODO: Understand the reason why we have data[0]?
 
         # Run the program
-        data = self.communicator["qick_program"].acquire(self.config.soc, progress=False)[0]
         cfg = self.config.config()[1]
         return_data = {}
+        if self.decimated_flag is True:
+            if cfg['reps'] > 1:
+                raise ValueError("Rep should be fixed to 1 for Decimated RO.")
+            elif len(self.specs) > 2:
+                raise ValueError("Decimated RO does not support parameter sweep.")
+            else:
+                data = {}
+                data[0] = self.communicator["qick_program"].acquire_decimated(self.config.soc, progress=False, rounds=self.config.config()[1]['rounds'])[0]
+        elif self.superdecimated_flag is True:
+            data = {}
+            data[0] = self.communicator["qick_program"].acquire(self.config.soc, progress=False, rounds=self.config.config()[1]['rounds'])[0]
+        else:
+            data = self.communicator["qick_program"].acquire(self.config.soc, progress=False)[0]
+        
 
         measIdx = 0  # To specify the index of the measured data to return
         sweepIdx = 0   # To specify the index of the sweep variable to return
@@ -105,6 +141,13 @@ class QickBoardSweep(AsyncRecord):
                 sweepIdx += 1
             elif isinstance(ds, TimeVariable):
                 return_data[ds.name]= (self.communicator["qick_program"].get_time_param(ds.time_parameter, 't', as_array=True))*(cfg['n_echoes']+1)
+                sweepIdx += 1
+            elif isinstance(ds, DecimatedVariable):
+                return_data[ds.name] = self.communicator["qick_program"].get_time_axis(ro_index=ds.ro_index)
+                sweepIdx += 1
+            elif isinstance(ds, SuperDecimatedVariable):
+                # It is under user's responsibility to generate an appropriate tlist under their qick_program.
+                return_data[ds.name] = self.communicator["qick_program"].tlist
                 sweepIdx += 1
             else:
                 return_data[ds.name] = np.arange(cfg['steps'])
