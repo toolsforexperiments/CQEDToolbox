@@ -36,7 +36,7 @@ logger = logging.getLogger(__name__)
 # --- Resonator fit configuration ---
 # Physical bounds for resonator fits, applied to whichever of these parameters the fit model has.
 # f_0 is additionally bounded to the swept range.
-_FIT_BOUNDS = {"Q_i": (1e4, 1e10), "Q_e_mag": (1e4, 1e10), "A": (0.0, np.inf)}
+_FIT_BOUNDS = {"Q_i": (100, 1e10), "Q_e_mag": (100, 1e10), "A": (0.0, np.inf)}
 # Below this residual ratio, S and conj(S) fit about equally well and the orientation choice is a coin flip.
 MIN_ORIENTATION_MARGIN = 1.2
 # Hanger resonance-shape acceptance.
