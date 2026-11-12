@@ -20,8 +20,8 @@ Since Pyro4 does not allow direct attribute access to object properties, this dr
 
 import logging
 from typing import Optional, Dict
-from qcodes import Instrument, InstrumentChannel, ChannelList
-from qcodes.utils.validators import Numbers, Enum, Bool
+from qcodes.instrument import Instrument, InstrumentChannel, ChannelList
+from qcodes.validators import Numbers, Enum, Bool
 
 # logger = logging.getLogger(__name__)
 
