@@ -285,7 +285,7 @@ class FluxoniumPowerRabi(ProtocolOperation):
         self.dependents["signal"] = np.asarray(data["signal"]["values"])
 
 
-    def analyze(self):
+    def _analyze_default(self):
         """
         Analyze Rabi-amplitude sweep and extract π-pulse amplitude vs flux.
         Method:

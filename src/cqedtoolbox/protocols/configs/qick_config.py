@@ -58,10 +58,12 @@ class QickConfig(QBoardConfig):
             'q_const_phase': getp(params, f"{active_qubit}.pulses.const.phase"),
 
             # Pi pulse
-            'q_pi_sigma': getp(params, f"{active_qubit}.pulses.pi.sigma"),
-            'q_pi_n_sigma': getp(params, f"{active_qubit}.pulses.pi.n_sigma"),
-            'q_pi_gain': getp(params, f"{active_qubit}.pulses.pi.gain"),
             'q_pi_phase': getp(params, f"{active_qubit}.pulses.pi.phase"),
+
+            # Optional cosine flat-top pi pulse
+            'q_pi_flattop_ramp': getp(params, f"{active_qubit}.pulses.pi.flattop_ramp"),
+            'q_pi_flattop_length': getp(params, f"{active_qubit}.pulses.pi.flattop_length"),
+            'q_pi_flattop_gain': getp(params, f"{active_qubit}.pulses.pi.flattop_gain"),
 
             # Measurements
 
@@ -80,10 +82,34 @@ class QickConfig(QBoardConfig):
             # Power rabi
             'q_gain_loop_var': QickSweep1D("q_gains_loop", getp(params, f"{active_qubit}.scripts.power_rabi.start_g"), getp(params, f"{active_qubit}.scripts.power_rabi.end_g")),
             'q_gain_steps': getp(params, f"{active_qubit}.scripts.power_rabi.steps"),
+            'amprabi_flattop_ramp': getp(params, f"{active_qubit}.scripts.power_rabi.flattop_ramp"),
+            'amprabi_flattop_length': getp(params, f"{active_qubit}.scripts.power_rabi.flattop_length"),
+
+            # Time Rabi
+            'timerabi_q_pulse_len_loop_var': QickSweep1D("timerabi_q_pulse_lens_loop", getp(params, f"{active_qubit}.scripts.time_rabi.pulse_len_start"), getp(params, f"{active_qubit}.scripts.time_rabi.pulse_len_end")),
+            'timerabi_q_pulse_len_steps': getp(params, f"{active_qubit}.scripts.time_rabi.pulse_len_steps"),
+            'timerabi_q_gain': getp(params, f"{active_qubit}.scripts.time_rabi.q_gain"),
+            'timerabi_flattop_ramp': getp(params, f"{active_qubit}.scripts.time_rabi.flattop_ramp"),
+
+            # Time Rabi vs frequency
+            'timerabi_vs_freq_q_freq_loop_var': QickSweep1D("timerabi_vs_freq_q_freq_loop", getp(params, f"{active_qubit}.scripts.time_rabi_vs_freq.q_freq_start"), getp(params, f"{active_qubit}.scripts.time_rabi_vs_freq.q_freq_end")),
+            'timerabi_vs_freq_q_freq_steps': getp(params, f"{active_qubit}.scripts.time_rabi_vs_freq.q_freq_steps"),
+            'timerabi_vs_freq_q_pulse_len_loop_var': QickSweep1D("timerabi_vs_freq_q_pulse_lens_loop", getp(params, f"{active_qubit}.scripts.time_rabi_vs_freq.pulse_len_start"), getp(params, f"{active_qubit}.scripts.time_rabi_vs_freq.pulse_len_end")),
+            'timerabi_vs_freq_q_pulse_len_steps': getp(params, f"{active_qubit}.scripts.time_rabi_vs_freq.pulse_len_steps"),
+            'timerabi_vs_freq_q_gain': getp(params, f"{active_qubit}.scripts.time_rabi_vs_freq.q_gain"),
+            'timerabi_vs_freq_flattop_ramp': getp(params, f"{active_qubit}.scripts.time_rabi_vs_freq.flattop_ramp"),
+
+            # Two-tone spectroscopy
+            'two_tone_spec_ro_len': getp(params, f"{active_qubit}.scripts.two_tone_spec.ro_len"),
+            'two_tone_spec_q_freq_var': QickSweep1D("two_tone_spec_q_freq_loop", getp(params, f"{active_qubit}.scripts.two_tone_spec.q_freq_start"), getp(params, f"{active_qubit}.scripts.two_tone_spec.q_freq_end")),
+            'two_tone_spec_q_freq_steps': getp(params, f"{active_qubit}.scripts.two_tone_spec.q_freq_steps"),
+            'two_tone_q_len': getp(params, f"{active_qubit}.scripts.two_tone_spec.q_len"),
+            'two_tone_q_const_phase': getp(params, f"{active_qubit}.scripts.two_tone_spec.q_phase"),
+            'two_tone_q_const_gain': getp(params, f"{active_qubit}.scripts.two_tone_spec.q_gain"),
 
             # Pi spec
             'pi_spec_freq_loop_var': QickSweep1D("pi_spec_freqs_loop", getp(params, f"{active_qubit}.scripts.pi_spec.start_f"), getp(params, f"{active_qubit}.scripts.pi_spec.end_f")),
-            'pi_spec_freq_steps': getp(params, f"{active_qubit}.scripts.pi_spec.steps"),
+            'pi_spec_freq_steps': getp(params, f"{active_qubit}.scripts.pi_spec.freq_steps"),
 
             # T1
             't1_wait_time_loop_var': QickSweep1D("t1_wait_time_loop", 0, getp(params, f"{active_qubit}.scripts.t1.n_T1") * getp(params, f"{active_qubit}.qubit.T1")),

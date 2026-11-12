@@ -3,6 +3,230 @@
     "unit": "",
     "value": "q01"
   },
+  "parameter_manager.corrections.pi_spec.averaging_factor": {
+    "unit": "",
+    "value": 2
+  },
+  "parameter_manager.corrections.pi_spec.max_averaging_increases": {
+    "unit": "",
+    "value": 2
+  },
+  "parameter_manager.corrections.pi_spec.max_fit_param_error": {
+    "unit": "",
+    "value": 0.3
+  },
+  "parameter_manager.corrections.pi_spec.snr": {
+    "unit": "",
+    "value": 1.5
+  },
+  "parameter_manager.corrections.power_rabi.averaging_factor": {
+    "unit": "",
+    "value": 2
+  },
+  "parameter_manager.corrections.power_rabi.delay_factor": {
+    "unit": "",
+    "value": 2
+  },
+  "parameter_manager.corrections.power_rabi.gain_shrink_factor": {
+    "unit": "",
+    "value": 2
+  },
+  "parameter_manager.corrections.power_rabi.max_averaging_increases": {
+    "unit": "",
+    "value": 2
+  },
+  "parameter_manager.corrections.power_rabi.max_delay_increases": {
+    "unit": "",
+    "value": 2
+  },
+  "parameter_manager.corrections.power_rabi.max_fit_param_error": {
+    "unit": "",
+    "value": 0.3
+  },
+  "parameter_manager.corrections.power_rabi.max_gain_shrinks": {
+    "unit": "",
+    "value": 2
+  },
+  "parameter_manager.corrections.power_rabi.max_sampling_increases": {
+    "unit": "",
+    "value": 2
+  },
+  "parameter_manager.corrections.power_rabi.sampling_factor": {
+    "unit": "",
+    "value": 2
+  },
+  "parameter_manager.corrections.power_rabi.snr": {
+    "unit": "",
+    "value": 1.5
+  },
+  "parameter_manager.corrections.res_spec.averaging_factor": {
+    "unit": "",
+    "value": 2
+  },
+  "parameter_manager.corrections.res_spec.max_averaging_increases": {
+    "unit": "",
+    "value": 2
+  },
+  "parameter_manager.corrections.res_spec.max_fit_param_error": {
+    "unit": "",
+    "value": 1.0
+  },
+  "parameter_manager.corrections.res_spec.max_sampling_increases": {
+    "unit": "",
+    "value": 2
+  },
+  "parameter_manager.corrections.res_spec.max_window_shifts": {
+    "unit": "",
+    "value": 0
+  },
+  "parameter_manager.corrections.res_spec.sampling_factor": {
+    "unit": "",
+    "value": 2
+  },
+  "parameter_manager.corrections.res_spec.snr": {
+    "unit": "",
+    "value": 1.5
+  },
+  "parameter_manager.corrections.res_spec_after_pi.detuning_threshold": {
+    "unit": "MHz",
+    "value": 1.0
+  },
+  "parameter_manager.corrections.res_spec_after_pi.max_fit_param_error": {
+    "unit": "",
+    "value": 1.0
+  },
+  "parameter_manager.corrections.res_spec_after_pi.snr": {
+    "unit": "",
+    "value": 1.5
+  },
+  "parameter_manager.corrections.res_spec_vs_gain.high_snr": {
+    "unit": "",
+    "value": 10
+  },
+  "parameter_manager.corrections.res_spec_vs_gain.max_fit_param_error": {
+    "unit": "",
+    "value": 1.0
+  },
+  "parameter_manager.corrections.res_spec_vs_gain.max_rep_increases": {
+    "unit": "",
+    "value": 2
+  },
+  "parameter_manager.corrections.res_spec_vs_gain.min_pass_fraction": {
+    "unit": "",
+    "value": 0.8
+  },
+  "parameter_manager.corrections.res_spec_vs_gain.rep_factor": {
+    "unit": "",
+    "value": 2
+  },
+  "parameter_manager.corrections.res_spec_vs_gain.snr": {
+    "unit": "",
+    "value": 3
+  },
+  "parameter_manager.corrections.sat_spec.averaging_factor": {
+    "unit": "",
+    "value": 2
+  },
+  "parameter_manager.corrections.sat_spec.max_averaging_increases": {
+    "unit": "",
+    "value": 2
+  },
+  "parameter_manager.corrections.sat_spec.max_fit_param_error": {
+    "unit": "",
+    "value": 0.3
+  },
+  "parameter_manager.corrections.sat_spec.max_power_increases": {
+    "unit": "",
+    "value": 2
+  },
+  "parameter_manager.corrections.sat_spec.max_sampling_increases": {
+    "unit": "",
+    "value": 2
+  },
+  "parameter_manager.corrections.sat_spec.max_window_shifts": {
+    "unit": "",
+    "value": 2
+  },
+  "parameter_manager.corrections.sat_spec.power_increase_factor": {
+    "unit": "",
+    "value": 2
+  },
+  "parameter_manager.corrections.sat_spec.power_reduction_factor": {
+    "unit": "",
+    "value": 2
+  },
+  "parameter_manager.corrections.sat_spec.sampling_factor": {
+    "unit": "",
+    "value": 2
+  },
+  "parameter_manager.corrections.sat_spec.single_peak_max_reductions": {
+    "unit": "",
+    "value": 2
+  },
+  "parameter_manager.corrections.sat_spec.single_peak_snr": {
+    "unit": "",
+    "value": 10
+  },
+  "parameter_manager.corrections.sat_spec.snr": {
+    "unit": "",
+    "value": 1.5
+  },
+  "parameter_manager.corrections.t1.averaging_factor": {
+    "unit": "",
+    "value": 2
+  },
+  "parameter_manager.corrections.t1.delay_factor": {
+    "unit": "",
+    "value": 2
+  },
+  "parameter_manager.corrections.t1.max_averaging_increases": {
+    "unit": "",
+    "value": 2
+  },
+  "parameter_manager.corrections.t1.max_delay_increases": {
+    "unit": "",
+    "value": 2
+  },
+  "parameter_manager.corrections.t1.max_fit_param_error": {
+    "unit": "",
+    "value": 0.3
+  },
+  "parameter_manager.corrections.t1.snr_min": {
+    "unit": "",
+    "value": 1.5
+  },
+  "parameter_manager.corrections.t2e.averaging_factor": {
+    "unit": "",
+    "value": 2
+  },
+  "parameter_manager.corrections.t2e.max_averaging_increases": {
+    "unit": "",
+    "value": 2
+  },
+  "parameter_manager.corrections.t2e.max_fit_param_error": {
+    "unit": "",
+    "value": 0.3
+  },
+  "parameter_manager.corrections.t2e.snr_min": {
+    "unit": "",
+    "value": 1.5
+  },
+  "parameter_manager.corrections.t2r.averaging_factor": {
+    "unit": "",
+    "value": 2
+  },
+  "parameter_manager.corrections.t2r.max_averaging_increases": {
+    "unit": "",
+    "value": 2
+  },
+  "parameter_manager.corrections.t2r.max_fit_param_error": {
+    "unit": "",
+    "value": 0.3
+  },
+  "parameter_manager.corrections.t2r.snr_min": {
+    "unit": "",
+    "value": 1.5
+  },
   "parameter_manager.msmt_params.delay": {
     "unit": "us",
     "value": 1.0
@@ -27,7 +251,11 @@
     "unit": "us",
     "value": 9.847294302273214
   },
-  "parameter_manager.q01.detuning": {
+  "parameter_manager.q01.artificial_detuning": {
+    "unit": "MHz",
+    "value": 0.5
+  },
+  "parameter_manager.q01.chi": {
     "unit": "MHz",
     "value": 1151.3851404190063
   },
@@ -39,17 +267,29 @@
     "unit": "",
     "value": 100
   },
+  "parameter_manager.q01.pi_spec_end": {
+    "unit": "Hz",
+    "value": 5010000000.0
+  },
+  "parameter_manager.q01.pi_spec_start": {
+    "unit": "Hz",
+    "value": 4990000000.0
+  },
   "parameter_manager.q01.pi_spec_steps": {
     "unit": "",
     "value": 300
   },
   "parameter_manager.q01.power_rabi_end": {
     "unit": "",
-    "value": 1.0
+    "value": 2.0
   },
   "parameter_manager.q01.power_rabi_start": {
     "unit": "",
     "value": 0.0
+  },
+  "parameter_manager.q01.pulses.const.gain": {
+    "unit": "",
+    "value": 0.2
   },
   "parameter_manager.q01.pulses.pi.amp": {
     "unit": "",
@@ -85,7 +325,7 @@
   },
   "parameter_manager.q01.sat_spec_steps": {
     "unit": "",
-    "value": 100
+    "value": 300
   },
   "parameter_manager.q01.t1_steps": {
     "unit": "",
@@ -99,17 +339,17 @@
     "unit": "",
     "value": 100
   },
-  "parameter_manager.qubit.end_f": {
+  "parameter_manager.qubit.f": {
     "unit": "Hz",
-    "value": 5010000000.0
-  },
-  "parameter_manager.qubit.start_f": {
-    "unit": "Hz",
-    "value": 4990000000.0
+    "value": 5000000000.0
   },
   "parameter_manager.readout.end_g": {
     "unit": "",
     "value": 0.9
+  },
+  "parameter_manager.readout.f": {
+    "unit": "Hz",
+    "value": 7000000000.0
   },
   "parameter_manager.readout.gain": {
     "unit": "",
@@ -118,6 +358,10 @@
   "parameter_manager.readout.length": {
     "unit": "us",
     "value": 1.0
+  },
+  "parameter_manager.readout.resonator_spec_vs_gain_steps": {
+    "unit": "",
+    "value": 50
   },
   "parameter_manager.readout.start_g": {
     "unit": "",

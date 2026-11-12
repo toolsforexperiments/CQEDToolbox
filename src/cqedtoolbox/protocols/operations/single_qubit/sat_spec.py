@@ -12,7 +12,7 @@ plt.switch_backend("agg")
 from labcore.analysis import DatasetAnalysis, Fit
 from labcore.analysis.fitfuncs.generic import Lorentzian
 from labcore.measurement.storage import run_and_save_sweep
-from labcore.data.datadict_storage import datadict_from_hdf5
+from labcore.data.datadict_storage import datadict_from_hdf5, load_as_xr
 from labcore.measurement.sweep import sweep_parameter
 from labcore.measurement.record import record_as
 
@@ -24,8 +24,11 @@ from cqedtoolbox.protocols.parameters import (
     SaturationSpecSteps,
     StartSaturationSpecFrequency, EndSaturationSpecFrequency, QubitFrequency,
     SaturationSpecDriveGain,
+    opx_check_qubit_window,
 )
+from cqedtoolbox.measurement_lib.opx.advanced.qubit_tuneup import measure_qubit_ssb_spec_saturation
 from cqedtoolbox.measurement_lib.qick.single_transmon_v2 import PulseProbeSpectroscopy
+from cqedtoolbox.readout.qubit_readout import rotate_complex_qubit_data
 
 
 logger = logging.getLogger(__name__)
@@ -46,6 +49,18 @@ class SNRThreshold(CorrectionParameter):
     def _qick_setter(self, value):
         self.params.corrections.sat_spec.snr(value)
 
+    def _dummy_getter(self):
+        return self.params.corrections.sat_spec.snr()
+
+    def _dummy_setter(self, value):
+        self.params.corrections.sat_spec.snr(value)
+
+    def _opx_getter(self):
+        return self.params.corrections.sat_spec.snr()
+
+    def _opx_setter(self, value):
+        self.params.corrections.sat_spec.snr(value)
+
 
 @dataclass
 class MaxFitParamError(CorrectionParameter):
@@ -56,6 +71,18 @@ class MaxFitParamError(CorrectionParameter):
         return self.params.corrections.sat_spec.max_fit_param_error()
 
     def _qick_setter(self, value):
+        self.params.corrections.sat_spec.max_fit_param_error(value)
+
+    def _dummy_getter(self):
+        return self.params.corrections.sat_spec.max_fit_param_error()
+
+    def _dummy_setter(self, value):
+        self.params.corrections.sat_spec.max_fit_param_error(value)
+        
+    def _opx_getter(self):
+        return self.params.corrections.sat_spec.max_fit_param_error()
+
+    def _opx_setter(self, value):
         self.params.corrections.sat_spec.max_fit_param_error(value)
 
 
@@ -70,6 +97,18 @@ class MaxWindowShifts(CorrectionParameter):
     def _qick_setter(self, value):
         self.params.corrections.sat_spec.max_window_shifts(value)
 
+    def _dummy_getter(self):
+        return int(self.params.corrections.sat_spec.max_window_shifts())
+
+    def _dummy_setter(self, value):
+        self.params.corrections.sat_spec.max_window_shifts(value)
+        
+    def _opx_getter(self):
+        return int(self.params.corrections.sat_spec.max_window_shifts())
+
+    def _opx_setter(self, value):
+        self.params.corrections.sat_spec.max_window_shifts(value)
+
 
 @dataclass
 class AveragingIncreaseFactor(CorrectionParameter):
@@ -80,6 +119,18 @@ class AveragingIncreaseFactor(CorrectionParameter):
         return self.params.corrections.sat_spec.averaging_factor()
 
     def _qick_setter(self, value):
+        self.params.corrections.sat_spec.averaging_factor(value)
+
+    def _dummy_getter(self):
+        return self.params.corrections.sat_spec.averaging_factor()
+
+    def _dummy_setter(self, value):
+        self.params.corrections.sat_spec.averaging_factor(value)
+        
+    def _opx_getter(self):
+        return self.params.corrections.sat_spec.averaging_factor()
+
+    def _opx_setter(self, value):
         self.params.corrections.sat_spec.averaging_factor(value)
 
 
@@ -94,6 +145,18 @@ class MaxAveragingIncreases(CorrectionParameter):
     def _qick_setter(self, value):
         self.params.corrections.sat_spec.max_averaging_increases(value)
 
+    def _dummy_getter(self):
+        return int(self.params.corrections.sat_spec.max_averaging_increases())
+
+    def _dummy_setter(self, value):
+        self.params.corrections.sat_spec.max_averaging_increases(value)
+        
+    def _opx_getter(self):
+        return int(self.params.corrections.sat_spec.max_averaging_increases())
+
+    def _opx_setter(self, value):
+        self.params.corrections.sat_spec.max_averaging_increases(value)
+
 
 @dataclass
 class SamplingIncreaseFactor(CorrectionParameter):
@@ -104,6 +167,18 @@ class SamplingIncreaseFactor(CorrectionParameter):
         return self.params.corrections.sat_spec.sampling_factor()
 
     def _qick_setter(self, value):
+        self.params.corrections.sat_spec.sampling_factor(value)
+
+    def _dummy_getter(self):
+        return self.params.corrections.sat_spec.sampling_factor()
+
+    def _dummy_setter(self, value):
+        self.params.corrections.sat_spec.sampling_factor(value)
+        
+    def _opx_getter(self):
+        return self.params.corrections.sat_spec.sampling_factor()
+
+    def _opx_setter(self, value):
         self.params.corrections.sat_spec.sampling_factor(value)
 
 
@@ -118,6 +193,18 @@ class MaxSamplingIncreases(CorrectionParameter):
     def _qick_setter(self, value):
         self.params.corrections.sat_spec.max_sampling_increases(value)
 
+    def _dummy_getter(self):
+        return int(self.params.corrections.sat_spec.max_sampling_increases())
+
+    def _dummy_setter(self, value):
+        self.params.corrections.sat_spec.max_sampling_increases(value)
+        
+    def _opx_getter(self):
+        return int(self.params.corrections.sat_spec.max_sampling_increases())
+
+    def _opx_setter(self, value):
+        self.params.corrections.sat_spec.max_sampling_increases(value)
+
 
 @dataclass
 class MaxPowerIncreases(CorrectionParameter):
@@ -128,6 +215,18 @@ class MaxPowerIncreases(CorrectionParameter):
         return int(self.params.corrections.sat_spec.max_power_increases())
 
     def _qick_setter(self, value):
+        self.params.corrections.sat_spec.max_power_increases(value)
+
+    def _dummy_getter(self):
+        return int(self.params.corrections.sat_spec.max_power_increases())
+
+    def _dummy_setter(self, value):
+        self.params.corrections.sat_spec.max_power_increases(value)
+        
+    def _opx_getter(self):
+        return int(self.params.corrections.sat_spec.max_power_increases())
+
+    def _opx_setter(self, value):
         self.params.corrections.sat_spec.max_power_increases(value)
 
 
@@ -142,6 +241,18 @@ class PowerIncreaseFactor(CorrectionParameter):
     def _qick_setter(self, value):
         self.params.corrections.sat_spec.power_increase_factor(value)
 
+    def _dummy_getter(self):
+        return self.params.corrections.sat_spec.power_increase_factor()
+
+    def _dummy_setter(self, value):
+        self.params.corrections.sat_spec.power_increase_factor(value)
+        
+    def _opx_getter(self):
+        return self.params.corrections.sat_spec.power_increase_factor()
+
+    def _opx_setter(self, value):
+        self.params.corrections.sat_spec.power_increase_factor(value)
+
 
 @dataclass
 class SinglePeakSNRThreshold(CorrectionParameter):
@@ -152,6 +263,18 @@ class SinglePeakSNRThreshold(CorrectionParameter):
         return self.params.corrections.sat_spec.single_peak_snr()
 
     def _qick_setter(self, value):
+        self.params.corrections.sat_spec.single_peak_snr(value)
+
+    def _dummy_getter(self):
+        return self.params.corrections.sat_spec.single_peak_snr()
+
+    def _dummy_setter(self, value):
+        self.params.corrections.sat_spec.single_peak_snr(value)
+        
+    def _opx_getter(self):
+        return self.params.corrections.sat_spec.single_peak_snr()
+
+    def _opx_setter(self, value):
         self.params.corrections.sat_spec.single_peak_snr(value)
 
 
@@ -166,6 +289,18 @@ class SinglePeakMaxPowerReductions(CorrectionParameter):
     def _qick_setter(self, value):
         self.params.corrections.sat_spec.single_peak_max_reductions(value)
 
+    def _dummy_getter(self):
+        return int(self.params.corrections.sat_spec.single_peak_max_reductions())
+
+    def _dummy_setter(self, value):
+        self.params.corrections.sat_spec.single_peak_max_reductions(value)
+        
+    def _opx_getter(self):
+        return int(self.params.corrections.sat_spec.single_peak_max_reductions())
+
+    def _opx_setter(self, value):
+        self.params.corrections.sat_spec.single_peak_max_reductions(value)
+
 
 @dataclass
 class PowerReductionFactor(CorrectionParameter):
@@ -176,6 +311,18 @@ class PowerReductionFactor(CorrectionParameter):
         return self.params.corrections.sat_spec.power_reduction_factor()
 
     def _qick_setter(self, value):
+        self.params.corrections.sat_spec.power_reduction_factor(value)
+
+    def _dummy_getter(self):
+        return self.params.corrections.sat_spec.power_reduction_factor()
+
+    def _dummy_setter(self, value):
+        self.params.corrections.sat_spec.power_reduction_factor(value)
+        
+    def _opx_getter(self):
+        return self.params.corrections.sat_spec.power_reduction_factor()
+
+    def _opx_setter(self, value):
         self.params.corrections.sat_spec.power_reduction_factor(value)
 
 
@@ -411,6 +558,7 @@ class SaturationSpectroscopy(ProtocolOperation):
 
     def __init__(self, params):
         super().__init__()
+        self.params = params
 
         self._register_inputs(
             repetitions=Repetition(params),
@@ -478,17 +626,9 @@ class SaturationSpectroscopy(ProtocolOperation):
         self.independents = {"frequencies": []}
         self.dependents = {"signal": []}
 
-        self.fit_result_re = None
-        self.fit_result_imag = None
-        self.fit_result_mag = None
-        self.snr_re = None
-        self.snr_imag = None
-        self.snr_mag = None
-        self.residuals_re = None
-        self.residuals_imag = None
-        self.residuals_mag = None
-        self._best_fit_result = None
-        self._winner_key: str | None = None
+        self.fit_result = None
+        self.snr = None
+        self.residuals = None
 
     def _measure_qick(self) -> Path:
         logger.info("Starting qick saturation spectroscopy measurement")
@@ -500,14 +640,30 @@ class SaturationSpectroscopy(ProtocolOperation):
 
         return loc
 
-    def _load_data_qick(self):
-        path = self.data_loc / "data.ddh5"
-        if not path.exists():
-            raise FileNotFoundError(f"File {path} does not exist")
-        data = datadict_from_hdf5(path)
+    def _measure_opx(self) -> Path:
+        logger.info("Starting opx saturation spectroscopy measurement")
+        opx_check_qubit_window(self.params, "scripts.qubit_tuneup.saturation_spec_range")
+        loc = measure_qubit_ssb_spec_saturation()
+        logger.info("Measurement complete")
+        return loc
 
-        self.independents["frequencies"] = data["freq"]["values"]
-        self.dependents["signal"] = data["signal"]["values"]
+    def _load_data_qick(self):
+        data = load_as_xr(self.data_loc)
+        rotated = rotate_complex_qubit_data(data)[0]
+        self.independents["frequencies"] = rotated["freq"].values
+        self.dependents["signal"] = rotated["signal"].values
+
+    def _load_data_opx(self):
+        data = load_as_xr(self.data_loc)
+        if "repetition" in data.dims:
+            data = data.mean("repetition")
+        data, _ = rotate_complex_qubit_data(data)
+        # Use the LO saved with the data, not the live one: it may have moved since the measurement.
+        saved = DatasetAnalysis(self.data_loc, self.name)
+        q = saved.load_saved_parameter("active.qubit")
+        lo = saved.load_saved_parameter(f"{q}.LO")
+        self.independents["frequencies"] = data["ssb_frequency"].values + lo
+        self.dependents["signal"] = data["signal"].values
 
     def _measure_dummy(self) -> Path:
         """Create synthetic saturation spectroscopy data using a sweep"""
@@ -539,170 +695,77 @@ class SaturationSpectroscopy(ProtocolOperation):
     def _load_data_dummy(self):
         """Load dummy data from disk (same as _load_data_qick)"""
         logger.info("Loading dummy data from disk")
-        path = self.data_loc / "data.ddh5"
-        if not path.exists():
-            raise FileNotFoundError(f"File {path} does not exist")
-        data = datadict_from_hdf5(path)
+        data = load_as_xr(self.data_loc)
+        rotated = rotate_complex_qubit_data(data)[0]
+        self.independents["frequencies"] = rotated["frequencies"].values
+        self.dependents["signal"] = rotated["signal"].values
 
-        self.independents["frequencies"] = data["frequencies"]["values"]
-        self.dependents["signal"] = data["signal"]["values"]
+    def _fit_lorentzian(self, frequencies, signal, fig_title="") -> tuple:
+        fit = Lorentzian(frequencies, signal)
+        fit_result = fit.run(fit)
+        fit_curve = fit_result.eval()
+        residuals = signal - fit_curve
+        amp = fit_result.params["A"].value
+        noise = np.std(residuals)
+        snr = np.abs(amp / (4 * noise))
 
-    def _fit_lorentzian_components(self, frequencies, signal, fig_title="") -> tuple:
-        """
-        Fit real, imaginary, and magnitude components with Lorentzian fits.
-        Returns (fit_result_re, residuals_re, snr_re), (fit_result_imag, ...), (fit_result_mag, ...),
-                fig_re, fig_imag, fig_mag
-        """
-        signal_re = signal.real
-        signal_imag = signal.imag
-        signal_mag = np.abs(signal)
+        fig, ax = plt.subplots()
+        ax.set_title(fig_title)
+        ax.set_xlabel("Frequency (Hz)")
+        ax.set_ylabel("Rotated Signal (A.U)")
+        ax.plot(frequencies, signal, label="Data")
+        ax.plot(frequencies, fit_curve, label="Fit")
+        ax.legend()
 
-        # Fit real part
-        fit_re = Lorentzian(frequencies, signal_re)
-        fit_result_re = fit_re.run(fit_re)
-        fit_curve_re = fit_result_re.eval()
-        residuals_re = signal_re - fit_curve_re
-        amp_re = fit_result_re.params["A"].value
-        noise_re = np.std(residuals_re)
-        snr_re = np.abs(amp_re / (4 * noise_re))
+        return fit_result, residuals, snr, fig
 
-        # Fit imaginary part
-        fit_imag = Lorentzian(frequencies, signal_imag)
-        fit_result_imag = fit_imag.run(fit_imag)
-        fit_curve_imag = fit_result_imag.eval()
-        residuals_imag = signal_imag - fit_curve_imag
-        amp_imag = fit_result_imag.params["A"].value
-        noise_imag = np.std(residuals_imag)
-        snr_imag = np.abs(amp_imag / (4 * noise_imag))
-
-        # Fit magnitude
-        fit_mag = Lorentzian(frequencies, signal_mag)
-        fit_result_mag = fit_mag.run(fit_mag)
-        fit_curve_mag = fit_result_mag.eval()
-        residuals_mag = signal_mag - fit_curve_mag
-        amp_mag = fit_result_mag.params["A"].value
-        noise_mag = np.std(residuals_mag)
-        snr_mag = np.abs(amp_mag / (4 * noise_mag))
-
-        # Real plot
-        fig_re, ax_re = plt.subplots()
-        ax_re.set_title(f"{fig_title} - Real")
-        ax_re.set_xlabel("Frequency (Hz)")
-        ax_re.set_ylabel("Signal Real (A.U)")
-        ax_re.plot(frequencies, signal_re, label="Data")
-        ax_re.plot(frequencies, fit_curve_re, label="Fit")
-        ax_re.legend()
-
-        # Imaginary plot
-        fig_imag, ax_imag = plt.subplots()
-        ax_imag.set_title(f"{fig_title} - Imaginary")
-        ax_imag.set_xlabel("Frequency (Hz)")
-        ax_imag.set_ylabel("Signal Imaginary (A.U)")
-        ax_imag.plot(frequencies, signal_imag, label="Data")
-        ax_imag.plot(frequencies, fit_curve_imag, label="Fit")
-        ax_imag.legend()
-
-        # Magnitude plot
-        fig_mag, ax_mag = plt.subplots()
-        ax_mag.set_title(f"{fig_title} - Magnitude")
-        ax_mag.set_xlabel("Frequency (Hz)")
-        ax_mag.set_ylabel("Signal Magnitude (A.U)")
-        ax_mag.plot(frequencies, signal_mag, label="Data")
-        ax_mag.plot(frequencies, fit_curve_mag, label="Fit")
-        ax_mag.legend()
-
-        return (
-            (fit_result_re, residuals_re, snr_re),
-            (fit_result_imag, residuals_imag, snr_imag),
-            (fit_result_mag, residuals_mag, snr_mag),
-            fig_re,
-            fig_imag,
-            fig_mag
-        )
-
-    def analyze(self):
+    def _analyze_default(self):
         with DatasetAnalysis(self.data_loc, self.name) as ds:
-            result_re, result_imag, result_mag, fig_re, fig_imag, fig_mag = self._fit_lorentzian_components(
+            self.fit_result, self.residuals, self.snr, fig = self._fit_lorentzian(
                 self.independents["frequencies"],
                 self.dependents["signal"],
                 "Saturation Spectroscopy"
             )
-
-            self.fit_result_re, self.residuals_re, self.snr_re = result_re
-            self.fit_result_imag, self.residuals_imag, self.snr_imag = result_imag
-            self.fit_result_mag, self.residuals_mag, self.snr_mag = result_mag
-
-            # Determine winner (highest SNR) for use in checks and success update
-            snr_map = {"re": self.snr_re, "imag": self.snr_imag, "mag": self.snr_mag}
-            self._winner_key = max(snr_map, key=lambda k: snr_map[k])
-            fit_map = {
-                "re": self.fit_result_re,
-                "imag": self.fit_result_imag,
-                "mag": self.fit_result_mag,
-            }
-            self._best_fit_result = fit_map[self._winner_key]
+            self._best_fit_result = self.fit_result
 
             ds.add(
-                fit_result_re=self.fit_result_re,
-                params_re=serialize_fit_params(self.fit_result_re.params),
-                snr_re=float(self.snr_re),
-                fit_result_imag=self.fit_result_imag,
-                params_imag=serialize_fit_params(self.fit_result_imag.params),
-                snr_imag=float(self.snr_imag),
-                fit_result_mag=self.fit_result_mag,
-                params_mag=serialize_fit_params(self.fit_result_mag.params),
-                snr_mag=float(self.snr_mag)
+                fit_result=self.fit_result,
+                params=serialize_fit_params(self.fit_result.params),
+                snr=float(self.snr)
             )
 
-            ds.add_figure(f"{self.name}_real", fig=fig_re)
-            image_path_re = ds._new_file_path(ds.savefolders[1], f"{self.name}_real", suffix="png")
-            self.figure_paths.append(image_path_re)
-
-            ds.add_figure(f"{self.name}_imag", fig=fig_imag)
-            image_path_imag = ds._new_file_path(ds.savefolders[1], f"{self.name}_imag", suffix="png")
-            self.figure_paths.append(image_path_imag)
-
-            ds.add_figure(f"{self.name}_mag", fig=fig_mag)
-            image_path_mag = ds._new_file_path(ds.savefolders[1], f"{self.name}_mag", suffix="png")
-            self.figure_paths.append(image_path_mag)
+            ds.add_figure(self.name, fig=fig)
+            image_path = ds._new_file_path(ds.savefolders[1], self.name, suffix="png")
+            self.figure_paths.append(image_path)
 
     # --- checks (pure assessment) ---
 
     def _check_fit_quality(self) -> CheckResult:
-        snr_map = {"re": self.snr_re, "imag": self.snr_imag, "mag": self.snr_mag}
-        winner_key = max(snr_map, key=lambda k: snr_map[k])
-        winner_snr = snr_map[winner_key]
-        winner_fit = {"re": self.fit_result_re, "imag": self.fit_result_imag, "mag": self.fit_result_mag}[winner_key]
-        label_map = {"re": "Real", "imag": "Imaginary", "mag": "Magnitude"}
-
         threshold = self.snr_threshold()
-        snr_passed = winner_snr >= threshold
+        snr_passed = self.snr >= threshold
 
+        # A and gamma are checked too: a fit that collapses onto a single noise point has a huge SNR
+        # and a tiny x0 error, but A and gamma are unconstrained.
         max_error = self.max_fit_param_error()
         bad_params = []
-        for pname, param in winner_fit.params.items():
-            if pname == "of":
-                continue
+        for pname in ("x0", "gamma", "A"):
+            param = self.fit_result.params[pname]
             if param.stderr is None:
                 bad_params.append(f"{pname}(no stderr)")
             elif param.value == 0 or abs(param.stderr / param.value) > max_error:
                 pct = abs(param.stderr / param.value) * 100 if param.value != 0 else float("inf")
                 bad_params.append(f"{pname}({pct:.0f}%)")
 
-        passed = snr_passed and len(bad_params) == 0
-        parts = [f"best_SNR={winner_snr:.3f} (threshold={threshold:.3f}, component={label_map[winner_key]})"]
+        passed = snr_passed and not bad_params
+        parts = [f"SNR={self.snr:.3f} (threshold={threshold:.3f})"]
         if bad_params:
             parts.append(f"high-error params: {', '.join(bad_params)}")
 
         return CheckResult("fit_quality", passed, "; ".join(parts))
 
     def _check_single_peak(self) -> CheckResult:
-        residuals_map = {
-            "re": self.residuals_re,
-            "imag": self.residuals_imag,
-            "mag": self.residuals_mag,
-        }
-        residuals = residuals_map[self._winner_key]
+        # TODO: make sure that the fit frequency is inside the swept range
+        residuals = self.residuals
         frequencies = self.independents["frequencies"]
 
         fit = Lorentzian(frequencies, residuals)
@@ -742,24 +805,8 @@ class SaturationSpectroscopy(ProtocolOperation):
         return CheckResult("single_peak", passed, description)
 
     def correct(self, result: EvaluateResult) -> EvaluateResult:
-        # Pop all figures before super() to control layout
-        fig_re = self.figure_paths[0] if len(self.figure_paths) >= 1 else None
-        fig_imag = self.figure_paths[1] if len(self.figure_paths) >= 2 else None
-        fig_mag = self.figure_paths[2] if len(self.figure_paths) >= 3 else None
+        figure = self.figure_paths[0] if self.figure_paths else None
         self.figure_paths.clear()
-
-        # Build component report (winner first)
-        snr_map = {"re": self.snr_re, "imag": self.snr_imag, "mag": self.snr_mag}
-        fig_map = {"re": fig_re, "imag": fig_imag, "mag": fig_mag}
-        fit_map = {
-            "re": self.fit_result_re,
-            "imag": self.fit_result_imag,
-            "mag": self.fit_result_mag,
-        }
-        label_map = {"re": "Real", "imag": "Imaginary", "mag": "Magnitude"}
-
-        sorted_keys = sorted(snr_map, key=lambda k: snr_map[k], reverse=True)
-        winner_key = sorted_keys[0]
 
         header = (f"## Saturation Spectroscopy\n"
                   f"Measured saturation spectroscopy for frequencies: "
@@ -767,19 +814,11 @@ class SaturationSpectroscopy(ProtocolOperation):
                   f"Data Path: `{self.data_loc}`\n\n")
         self.report_output.append(header)
 
-        winner_label = label_map[winner_key]
         self.report_output.extend([
-            f"### **{winner_label} Component (SELECTED, SNR={snr_map[winner_key]:.3f})**\n\n",
-            fig_map[winner_key],
-            f"**Fit Report:**\n```\n{fit_map[winner_key].lmfit_result.fit_report()}\n```\n\n",
+            f"### Rotated Signal Fit (SNR={self.snr:.3f})\n\n",
+            figure,
+            f"**Fit Report:**\n```\n{self.fit_result.lmfit_result.fit_report()}\n```\n\n",
         ])
-
-        for k in sorted_keys[1:]:
-            self.report_output.extend([
-                f"### **{label_map[k]} Component (SNR={snr_map[k]:.3f})**\n\n",
-                fig_map[k],
-                f"**Fit Report:**\n```\n{fit_map[k].lmfit_result.fit_report()}\n```\n\n",
-            ])
 
         # Let super() add the check table; no auto-figure since figure_paths is cleared
         result = super().correct(result)

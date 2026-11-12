@@ -157,9 +157,9 @@ class DMTCurrentSource(VisaInstrument):
         self, address: str, visalib: str | None
         ) -> tuple[pyvisa.resources.MessageBasedResource, str, pyvisa.ResourceManager]:
 
-        resource, visabackend, resource_manager = super()._open_resource(address, visalib)
+        resource = super()._open_resource(address, visalib)
         resource.baud_rate = 115200
-        return resource, visabackend, resource_manager
+        return resource
     
     def get_temp(self):
         temp_response = self.ask("!tmp")

@@ -367,9 +367,14 @@ def measure_pi_spec():
     frange = getp(f"scripts.{SCRIPT}.qubit_spec_range")
 
     # dynamically make a weaker pipulse to narrow the line
-    weaken_by = duration / (
-        getp(f"{qn}.pulses.pi.sigma") * getp(f"{qn}.pulses.pi.nsigma")
-    )
+    try:
+        weaken_by = duration / (
+            getp(f"{qn}.pulses.pi.sigma") * getp(f"{qn}.pulses.pi.nsigma")
+        )
+    except:
+        weaken_by = duration / (
+            getp(f"{qn}.pulses.pi.len")
+        )
     amplitude = 1.0 / weaken_by
 
     # crudely estimate the linewidth; then roughly 5 pts per linewidth

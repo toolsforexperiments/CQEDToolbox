@@ -11,11 +11,11 @@ from labcore.analysis import DatasetAnalysis
 from labcore.analysis.fitfuncs.generic import Cosine
 from labcore.measurement.storage import run_and_save_sweep
 from labcore.measurement import sweep_parameter, record_as
-from labcore.data.datadict_storage import datadict_from_hdf5
+from labcore.data.datadict_storage import datadict_from_hdf5, load_as_xr
 
 from labcore.protocols.base import (
     ProtocolOperation, serialize_fit_params,
-    CorrectionParameter, CheckResult, Correction, EvaluateResult,
+    CorrectionParameter, CheckResult, Correction, EvaluateResult, PlatformTypes,
 )
 from cqedtoolbox.protocols.parameters import (
     Repetition,
@@ -25,7 +25,9 @@ from cqedtoolbox.protocols.parameters import (
     NumGainSteps,
     Delay,
 )
+from cqedtoolbox.measurement_lib.opx.advanced.qubit_tuneup import measure_power_rabi
 from cqedtoolbox.measurement_lib.qick.single_transmon_v2 import AmplitudeRabiProgram
+from cqedtoolbox.readout.qubit_readout import rotate_complex_qubit_data
 
 
 logger = logging.getLogger(__name__)
@@ -42,6 +44,10 @@ class SNRThreshold(CorrectionParameter):
 
     def _qick_getter(self): return self.params.corrections.power_rabi.snr()
     def _qick_setter(self, v): self.params.corrections.power_rabi.snr(v)
+    def _dummy_getter(self): return self.params.corrections.power_rabi.snr()
+    def _dummy_setter(self, v): self.params.corrections.power_rabi.snr(v)
+    def _opx_getter(self): return self.params.corrections.power_rabi.snr()
+    def _opx_setter(self, v): self.params.corrections.power_rabi.snr(v)
 
 
 @dataclass
@@ -51,6 +57,10 @@ class MaxFitParamError(CorrectionParameter):
 
     def _qick_getter(self): return self.params.corrections.power_rabi.max_fit_param_error()
     def _qick_setter(self, v): self.params.corrections.power_rabi.max_fit_param_error(v)
+    def _dummy_getter(self): return self.params.corrections.power_rabi.max_fit_param_error()
+    def _dummy_setter(self, v): self.params.corrections.power_rabi.max_fit_param_error(v)
+    def _opx_getter(self): return self.params.corrections.power_rabi.max_fit_param_error()
+    def _opx_setter(self, v): self.params.corrections.power_rabi.max_fit_param_error(v)
 
 
 @dataclass
@@ -60,6 +70,10 @@ class AveragingIncreaseFactor(CorrectionParameter):
 
     def _qick_getter(self): return self.params.corrections.power_rabi.averaging_factor()
     def _qick_setter(self, v): self.params.corrections.power_rabi.averaging_factor(v)
+    def _dummy_getter(self): return self.params.corrections.power_rabi.averaging_factor()
+    def _dummy_setter(self, v): self.params.corrections.power_rabi.averaging_factor(v)
+    def _opx_getter(self): return self.params.corrections.power_rabi.averaging_factor()
+    def _opx_setter(self, v): self.params.corrections.power_rabi.averaging_factor(v)
 
 
 @dataclass
@@ -69,6 +83,10 @@ class MaxAveragingIncreases(CorrectionParameter):
 
     def _qick_getter(self): return int(self.params.corrections.power_rabi.max_averaging_increases())
     def _qick_setter(self, v): self.params.corrections.power_rabi.max_averaging_increases(v)
+    def _dummy_getter(self): return int(self.params.corrections.power_rabi.max_averaging_increases())
+    def _dummy_setter(self, v): self.params.corrections.power_rabi.max_averaging_increases(v)
+    def _opx_getter(self): return int(self.params.corrections.power_rabi.max_averaging_increases())
+    def _opx_setter(self, v): self.params.corrections.power_rabi.max_averaging_increases(v)
 
 
 @dataclass
@@ -78,6 +96,10 @@ class SamplingIncreaseFactor(CorrectionParameter):
 
     def _qick_getter(self): return self.params.corrections.power_rabi.sampling_factor()
     def _qick_setter(self, v): self.params.corrections.power_rabi.sampling_factor(v)
+    def _dummy_getter(self): return self.params.corrections.power_rabi.sampling_factor()
+    def _dummy_setter(self, v): self.params.corrections.power_rabi.sampling_factor(v)
+    def _opx_getter(self): return self.params.corrections.power_rabi.sampling_factor()
+    def _opx_setter(self, v): self.params.corrections.power_rabi.sampling_factor(v)
 
 
 @dataclass
@@ -87,6 +109,10 @@ class MaxSamplingIncreases(CorrectionParameter):
 
     def _qick_getter(self): return int(self.params.corrections.power_rabi.max_sampling_increases())
     def _qick_setter(self, v): self.params.corrections.power_rabi.max_sampling_increases(v)
+    def _dummy_getter(self): return int(self.params.corrections.power_rabi.max_sampling_increases())
+    def _dummy_setter(self, v): self.params.corrections.power_rabi.max_sampling_increases(v)
+    def _opx_getter(self): return int(self.params.corrections.power_rabi.max_sampling_increases())
+    def _opx_setter(self, v): self.params.corrections.power_rabi.max_sampling_increases(v)
 
 
 @dataclass
@@ -96,6 +122,10 @@ class DelayIncreaseFactor(CorrectionParameter):
 
     def _qick_getter(self): return self.params.corrections.power_rabi.delay_factor()
     def _qick_setter(self, v): self.params.corrections.power_rabi.delay_factor(v)
+    def _dummy_getter(self): return self.params.corrections.power_rabi.delay_factor()
+    def _dummy_setter(self, v): self.params.corrections.power_rabi.delay_factor(v)
+    def _opx_getter(self): return self.params.corrections.power_rabi.delay_factor()
+    def _opx_setter(self, v): self.params.corrections.power_rabi.delay_factor(v)
 
 
 @dataclass
@@ -105,6 +135,10 @@ class MaxDelayIncreases(CorrectionParameter):
 
     def _qick_getter(self): return int(self.params.corrections.power_rabi.max_delay_increases())
     def _qick_setter(self, v): self.params.corrections.power_rabi.max_delay_increases(v)
+    def _dummy_getter(self): return int(self.params.corrections.power_rabi.max_delay_increases())
+    def _dummy_setter(self, v): self.params.corrections.power_rabi.max_delay_increases(v)
+    def _opx_getter(self): return int(self.params.corrections.power_rabi.max_delay_increases())
+    def _opx_setter(self, v): self.params.corrections.power_rabi.max_delay_increases(v)
 
 
 @dataclass
@@ -114,6 +148,10 @@ class GainRangeShrinkFactor(CorrectionParameter):
 
     def _qick_getter(self): return self.params.corrections.power_rabi.gain_shrink_factor()
     def _qick_setter(self, v): self.params.corrections.power_rabi.gain_shrink_factor(v)
+    def _dummy_getter(self): return self.params.corrections.power_rabi.gain_shrink_factor()
+    def _dummy_setter(self, v): self.params.corrections.power_rabi.gain_shrink_factor(v)
+    def _opx_getter(self): return self.params.corrections.power_rabi.gain_shrink_factor()
+    def _opx_setter(self, v): self.params.corrections.power_rabi.gain_shrink_factor(v)
 
 
 @dataclass
@@ -123,6 +161,10 @@ class MaxGainRangeShrinks(CorrectionParameter):
 
     def _qick_getter(self): return int(self.params.corrections.power_rabi.max_gain_shrinks())
     def _qick_setter(self, v): self.params.corrections.power_rabi.max_gain_shrinks(v)
+    def _dummy_getter(self): return int(self.params.corrections.power_rabi.max_gain_shrinks())
+    def _dummy_setter(self, v): self.params.corrections.power_rabi.max_gain_shrinks(v)
+    def _opx_getter(self): return int(self.params.corrections.power_rabi.max_gain_shrinks())
+    def _opx_setter(self, v): self.params.corrections.power_rabi.max_gain_shrinks(v)
 
 
 # ---------------------------------------------------------------------------
@@ -284,6 +326,7 @@ class PowerRabi(ProtocolOperation):
 
     def __init__(self, params):
         super().__init__()
+        self.params = params
 
         self._register_inputs(
             repetitions=Repetition(params),
@@ -340,23 +383,27 @@ class PowerRabi(ProtocolOperation):
 
         self._register_success_update(
             self.qubit_gain,
-            lambda: 1 / (2 * self._winner_fit.params["f"].value),
+            self._new_pi_gain,
         )
 
         self.independents = {"gains": []}
         self.dependents = {"signal": []}
 
-        self.fit_result_re = None
-        self.fit_result_imag = None
-        self.fit_result_mag = None
-        self.snr_re = None
-        self.snr_imag = None
-        self.snr_mag = None
-        self._winner_fit = None
-        self._winner_snr = None
-        self._winner_key = None
-        self._winner_name = None
-        self._sorted_components = None
+        self.fit_result = None
+        self.residuals = None
+        self.snr = None
+
+    def _new_pi_gain(self) -> float:
+        """Pi gain from the fitted Rabi frequency: the swept gain at half a period, 1/(2f)."""
+        pi_point = 1 / (2 * self.fit_result.params["f"].value)
+        if self.platform_type == PlatformTypes.OPX:
+            # WARNING: on the OPX the swept "amplitude" is a multiplier on the current pi pulse
+            # (play(pi_pulse * amp(a))), not an absolute amplitude, so pi_point is a scale factor.
+            # This assumes the setup's QM config builds the pi waveform from {qubit}.pulses.pi.amp
+            # (the parameter QubitGain reads/writes). If the config takes the amplitude from
+            # anywhere else, this update is wrong.
+            return self.qubit_gain() * pi_point
+        return pi_point
 
     def _measure_qick(self) -> Path:
         logger.info("Starting qick power rabi measurement")
@@ -366,6 +413,12 @@ class PowerRabi(ProtocolOperation):
         loc, da = run_and_save_sweep(sweep, "data", self.name)
         logger.info("Measurement complete")
 
+        return loc
+
+    def _measure_opx(self) -> Path:
+        logger.info("Starting opx power rabi measurement")
+        loc = measure_power_rabi()
+        logger.info("Measurement complete")
         return loc
 
     def _measure_dummy(self):
@@ -383,166 +436,85 @@ class PowerRabi(ProtocolOperation):
         return loc
 
     def _load_data_qick(self):
-        path = self.data_loc / "data.ddh5"
-        if not path.exists():
-            raise FileNotFoundError(f"File {path} does not exist")
-        data = datadict_from_hdf5(path)
+        data = load_as_xr(self.data_loc)
+        rotated = rotate_complex_qubit_data(data)[0]
+        self.independents["gains"] = rotated["gain"].values
+        self.dependents["signal"] = rotated["signal"].values
 
-        self.independents["gains"] = data["gain"]["values"]
-        self.dependents["signal"] = data["signal"]["values"]
+    def _load_data_opx(self):
+        data = load_as_xr(self.data_loc)
+        if "repetition" in data.dims:
+            data = data.mean("repetition")
+        data, _ = rotate_complex_qubit_data(data)
+        self.independents["gains"] = data["amplitude"].values
+        self.dependents["signal"] = data["signal"].values
 
     def _load_data_dummy(self):
-        path = self.data_loc / "data.ddh5"
-        if not path.exists():
-            raise FileNotFoundError(f"File {path} does not exist")
-        data = datadict_from_hdf5(path)
+        data = load_as_xr(self.data_loc)
+        rotated = rotate_complex_qubit_data(data)[0]
+        self.independents["gains"] = rotated["gains"].values
+        self.dependents["signal"] = rotated["signal"].values
 
-        self.independents["gains"] = data["gains"]["values"]
-        self.dependents["signal"] = data["signal"]["values"]
+    def _fit_cosine(self, gains, signal, fig_title="") -> tuple:
+        fit = Cosine(gains, signal)
+        fit_result = fit.run(fit)
+        fit_curve = fit_result.eval()
+        residuals = signal - fit_curve
+        amp = fit_result.params["A"].value
+        noise = np.std(residuals)
+        snr = np.abs(amp / (4 * noise))
 
-    def _fit_cosine_components(self, gains, signal, fig_title="") -> tuple:
-        """
-        Fit real, imaginary, and magnitude components with Cosine fits.
-        Returns (fit_result_re, fit_result_imag, fit_result_mag, fig_re, fig_imag, fig_mag)
-        """
-        signal_re = signal.real
-        signal_imag = signal.imag
-        signal_mag = np.abs(signal)
+        fig, ax = plt.subplots()
+        ax.set_title(fig_title)
+        ax.set_xlabel("Gain (A.U)")
+        ax.set_ylabel("Rotated Signal (A.U)")
+        ax.plot(gains, signal, label="Data")
+        ax.plot(gains, fit_curve, label="Fit")
+        ax.legend()
 
-        # Fit real part
-        fit_re = Cosine(gains, signal_re)
-        fit_result_re = fit_re.run(fit_re)
-        fit_curve_re = fit_result_re.eval()
-        residuals_re = signal_re - fit_curve_re
-        amp_re = fit_result_re.params["A"].value
-        noise_re = np.std(residuals_re)
-        snr_re = np.abs(amp_re / (4 * noise_re))
+        return fit_result, residuals, snr, fig
 
-        # Fit imaginary part
-        fit_imag = Cosine(gains, signal_imag)
-        fit_result_imag = fit_imag.run(fit_imag)
-        fit_curve_imag = fit_result_imag.eval()
-        residuals_imag = signal_imag - fit_curve_imag
-        amp_imag = fit_result_imag.params["A"].value
-        noise_imag = np.std(residuals_imag)
-        snr_imag = np.abs(amp_imag / (4 * noise_imag))
-
-        # Fit magnitude
-        fit_mag = Cosine(gains, signal_mag)
-        fit_result_mag = fit_mag.run(fit_mag)
-        fit_curve_mag = fit_result_mag.eval()
-        residuals_mag = signal_mag - fit_curve_mag
-        amp_mag = fit_result_mag.params["A"].value
-        noise_mag = np.std(residuals_mag)
-        snr_mag = np.abs(amp_mag / (4 * noise_mag))
-
-        # Create three separate figures
-        fig_re, ax_re = plt.subplots()
-        ax_re.set_title(f"{fig_title} - Real")
-        ax_re.set_xlabel("Gain (A.U)")
-        ax_re.set_ylabel("Signal Real (A.U)")
-        ax_re.plot(gains, signal_re, label="Data")
-        ax_re.plot(gains, fit_curve_re, label="Fit")
-        ax_re.legend()
-
-        fig_imag, ax_imag = plt.subplots()
-        ax_imag.set_title(f"{fig_title} - Imaginary")
-        ax_imag.set_xlabel("Gain (A.U)")
-        ax_imag.set_ylabel("Signal Imaginary (A.U)")
-        ax_imag.plot(gains, signal_imag, label="Data")
-        ax_imag.plot(gains, fit_curve_imag, label="Fit")
-        ax_imag.legend()
-
-        fig_mag, ax_mag = plt.subplots()
-        ax_mag.set_title(f"{fig_title} - Magnitude")
-        ax_mag.set_xlabel("Gain (A.U)")
-        ax_mag.set_ylabel("Signal Magnitude (A.U)")
-        ax_mag.plot(gains, signal_mag, label="Data")
-        ax_mag.plot(gains, fit_curve_mag, label="Fit")
-        ax_mag.legend()
-
-        return (
-            (fit_result_re, residuals_re, snr_re),
-            (fit_result_imag, residuals_imag, snr_imag),
-            (fit_result_mag, residuals_mag, snr_mag),
-            fig_re,
-            fig_imag,
-            fig_mag
-        )
-
-    def analyze(self):
+    def _analyze_default(self):
         with DatasetAnalysis(self.data_loc, self.name) as ds:
-            result_re, result_imag, result_mag, fig_re, fig_imag, fig_mag = self._fit_cosine_components(
+            self.fit_result, self.residuals, self.snr, fig = self._fit_cosine(
                 self.independents["gains"],
                 self.dependents["signal"],
                 "Power Rabi"
             )
 
-            self.fit_result_re, residuals_re, self.snr_re = result_re
-            self.fit_result_imag, residuals_imag, self.snr_imag = result_imag
-            self.fit_result_mag, residuals_mag, self.snr_mag = result_mag
-
-            # Determine winner (highest SNR) for check and success update
-            snr_dict = {
-                "Real":      (self.snr_re,   self.fit_result_re,   "re"),
-                "Imaginary": (self.snr_imag, self.fit_result_imag, "imag"),
-                "Magnitude": (self.snr_mag,  self.fit_result_mag,  "mag"),
-            }
-            self._sorted_components = sorted(snr_dict.items(), key=lambda x: x[1][0], reverse=True)
-            self._winner_name, (self._winner_snr, self._winner_fit, self._winner_key) = self._sorted_components[0]
-
             # Save all fit results
             ds.add(
-                fit_result_re=self.fit_result_re,
-                params_re=serialize_fit_params(self.fit_result_re.params),
-                snr_re=float(self.snr_re),
-                fit_result_imag=self.fit_result_imag,
-                params_imag=serialize_fit_params(self.fit_result_imag.params),
-                snr_imag=float(self.snr_imag),
-                fit_result_mag=self.fit_result_mag,
-                params_mag=serialize_fit_params(self.fit_result_mag.params),
-                snr_mag=float(self.snr_mag)
+                fit_result=self.fit_result,
+                params=serialize_fit_params(self.fit_result.params),
+                snr=float(self.snr)
             )
 
-            ds.add_figure(f"{self.name}_real", fig=fig_re)
-            image_path_re = ds._new_file_path(ds.savefolders[1], f"{self.name}_real", suffix="png")
-            self.figure_paths.append(image_path_re)
-
-            ds.add_figure(f"{self.name}_imag", fig=fig_imag)
-            image_path_imag = ds._new_file_path(ds.savefolders[1], f"{self.name}_imag", suffix="png")
-            self.figure_paths.append(image_path_imag)
-
-            ds.add_figure(f"{self.name}_mag", fig=fig_mag)
-            image_path_mag = ds._new_file_path(ds.savefolders[1], f"{self.name}_mag", suffix="png")
-            self.figure_paths.append(image_path_mag)
+            ds.add_figure(self.name, fig=fig)
+            image_path = ds._new_file_path(ds.savefolders[1], self.name, suffix="png")
+            self.figure_paths.append(image_path)
 
     def _check_quality(self) -> CheckResult:
         threshold = self.snr_threshold()
-        snr_passed = self._winner_snr >= threshold
+        snr_passed = self.snr >= threshold
 
         max_error = self.max_fit_param_error()
-        bad_params = []
-        for pname, param in self._winner_fit.params.items():
-            if param.stderr is None:
-                bad_params.append(f"{pname}(no stderr)")
-            elif param.value == 0 or abs(param.stderr / param.value) > max_error:
-                pct = abs(param.stderr / param.value) * 100 if param.value != 0 else float("inf")
-                bad_params.append(f"{pname}({pct:.0f}%)")
+        param = self.fit_result.params["f"]
+        bad_param = None
+        if param.stderr is None:
+            bad_param = "f(no stderr)"
+        elif param.value == 0 or abs(param.stderr / param.value) > max_error:
+            pct = abs(param.stderr / param.value) * 100 if param.value != 0 else float("inf")
+            bad_param = f"f({pct:.0f}%)"
 
-        passed = snr_passed and len(bad_params) == 0
-        parts = [f"winner={self._winner_name}, SNR={self._winner_snr:.3f} (threshold={threshold:.3f})"]
-        if bad_params:
-            parts.append(f"high-error params: {', '.join(bad_params)}")
+        passed = snr_passed and bad_param is None
+        parts = [f"SNR={self.snr:.3f} (threshold={threshold:.3f})"]
+        if bad_param:
+            parts.append(f"high-error param: {bad_param}")
         return CheckResult("quality_check", passed, "; ".join(parts))
 
     def correct(self, result: EvaluateResult) -> EvaluateResult:
-        # Pop all figures before super() auto-appends the last one
-        fig_re   = self.figure_paths.pop(0) if len(self.figure_paths) >= 3 else None
-        fig_imag = self.figure_paths.pop(0) if self.figure_paths else None
-        fig_mag  = self.figure_paths.pop(0) if self.figure_paths else None
-        self.figure_paths.clear()  # prevent auto-append
-
-        plot_map = {"re": fig_re, "imag": fig_imag, "mag": fig_mag}
+        figure = self.figure_paths[0] if self.figure_paths else None
+        self.figure_paths.clear()
 
         self.report_output.append(
             f"## Power Rabi\n"
@@ -551,15 +523,13 @@ class PowerRabi(ProtocolOperation):
             f"Data Path: `{self.data_loc}`\n\n"
         )
 
-        for i, (comp_name, (comp_snr, comp_fit, comp_key)) in enumerate(self._sorted_components):
-            tag = "(SELECTED)" if i == 0 else "(NOT SELECTED)"
-            self.report_output.append(f"### **{comp_name} Component {tag}**\n")
-            if plot_map[comp_key]:
-                self.report_output.append(plot_map[comp_key])
-            self.report_output.append(
-                f"SNR={comp_snr:.3f}\n\n"
-                f"**Fit Report:**\n```\n{str(comp_fit.lmfit_result.fit_report())}\n```\n\n"
-            )
+        self.report_output.append("### Rotated Signal Fit\n")
+        if figure:
+            self.report_output.append(figure)
+        self.report_output.append(
+            f"SNR={self.snr:.3f}\n\n"
+            f"**Fit Report:**\n```\n{str(self.fit_result.lmfit_result.fit_report())}\n```\n\n"
+        )
 
         result = super().correct(result)   # adds check table + success update line
         return result

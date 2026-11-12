@@ -4,15 +4,20 @@ from time import sleep
 
 from labcore.measurement import recording, independent, dependent, indep, dep
 
-from cqedtoolbox.instruments.qcodes_drivers.Keysight.Keysight_P937A import Keysight_P9374A_SingleChannel
 from cqedtoolbox.instruments.qcodes_drivers.SignalCore.SignalCore_sc5511a import SignalCore_SC5511A
+from cqedtoolbox.measurement_lib.vna_type import VnaType
 
 #: VNA
-vna: Optional[Keysight_P9374A_SingleChannel] = None
+
+vna: Optional[VnaType] = None
 
 #: qubit generator -- used for twotone spec
 qubit_generator: Optional[SignalCore_SC5511A] = None
 
+# Make sure this is called before referencing the functions below
+def set_vna(instrument: VnaType):
+    global vna
+    vna = instrument
 
 @recording(
     independent('frequency', unit='Hz'),
@@ -128,3 +133,70 @@ def configure_qubit_generator_for_twotone_spec(frequencies, naverages, dwell_tim
     qubit_generator.tri_waveform(0)
     # set the sweep direction to go from low to high
     qubit_generator.sweep_dir(0)
+
+# Non-labcore sweep
+def s_parameter_vs_freq(start_frequency, stop_frequency, num_points=200, s_parameter='S21', naverages=None, settling_time=1):
+    """
+    Acquire one complex S-parameter trace over a frequency range.
+
+    Configures "trace_1" for the selected S-parameter, sets the VNA
+    center frequency, span, and number of sweep points, enables internal
+    continuous sweeping, clears the averaging buffer, waits for acquisition,
+    and returns the trace frequency axis and complex data.
+
+    This function is compatible with the Keysight and M5180 VNA drivers.
+    The M5180 uses ``settling_time`` to allow the sweep and averaging to
+    complete; the Keysight driver waits internally when trace data is read.
+
+    Note: To use in a labcore sweep, add the @recording decorator with appropriate independent and dependent variables.
+    Ex: 
+        recording(
+            independent('frequency', unit='Hz'),
+            dependent('trace', depends_on=['frequency'])
+                ) (s_parameter_vs_freq)
+
+    Parameters
+    ----------
+    start_frequency : float
+        Sweep start frequency in Hz.
+    stop_frequency : float
+        Sweep stop frequency in Hz. Must exceed ``start_frequency``.
+    num_points : int, optional
+        Number of frequency points in the VNA sweep. Default is 200.
+    s_parameter : {'S11', 'S12', 'S21', 'S22'}, optional
+        S-parameter assigned to ``trace_1``. Default is ``'S21'``.
+    naverages : int or None, optional
+        VNA average count. If None, retains the currently configured value;
+        this is useful when an outer LabCore sweep sets ``avg_num``.
+    settling_time : float, optional
+        Delay in seconds before reading the trace. For the M5180, choose a
+        value long enough for the configured IF bandwidth, point count, and
+        average count. Default is 1 second.
+
+    Returns
+    -------
+    frequency : numpy.ndarray
+        Frequency values in Hz.
+    trace : numpy.ndarray or str
+        Complex S-parameter data from ``trace_1``. Older InstrumentServer
+        versions may return its serialized representation as a string.
+    """
+    vna.fcenter((start_frequency + stop_frequency) / 2)
+    vna.fspan(stop_frequency - start_frequency)
+    vna.num_points(num_points)
+    vna.trace_1.s_parameter(s_parameter)
+
+    vna.trigger_source("IMM")
+    vna.trigger_mode("SWE")
+    vna.sweep_mode("CONT")
+    if naverages is not None:
+        vna.avg_num(naverages)
+    vna.averaging(1)
+    vna.clear_averages()
+
+    sleep(settling_time)
+
+    freqs = vna.trace_1.frequency()
+    trace = vna.trace_1.data()
+
+    return freqs, trace

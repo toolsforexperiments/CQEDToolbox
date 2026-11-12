@@ -448,7 +448,7 @@ class ResonatorSpectroscopyVsFlux(ProtocolOperation):
         self.dependents["signal"] = np.asarray(data["signal"]["values"])
 
 
-    def analyze(self):
+    def _analyze_default(self):
         """Fit (single/double), compute zero-flux candidates with data having good snr."""
         with DatasetAnalysis(self.data_loc.parent, self.name) as ds:
             freqs = np.asarray(self.independents["frequencies"][0,0,:])
