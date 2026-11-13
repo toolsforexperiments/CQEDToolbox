@@ -59,8 +59,15 @@ class QickConfig(QBoardConfig):
 
             # Pi pulse
             'q_pi_phase': getp(params, f"{active_qubit}.pulses.pi.phase"),
+            # "gaussian" or "flattop". Selects the pi-pulse shape for every program that plays a pi pulse.
+            'q_pi_pulse_shape': getp(params, f"{active_qubit}.pulses.pi.pulse_shape"),
 
-            # Optional cosine flat-top pi pulse
+            # Gaussian pi pulse (used when pulse_shape == "gaussian")
+            'q_pi_gaussian_sigma': getp(params, f"{active_qubit}.pulses.pi.gaussian_sigma"),
+            'q_pi_gaussian_nsigma': getp(params, f"{active_qubit}.pulses.pi.gaussian_nsigma"),
+            'q_pi_gaussian_amp': getp(params, f"{active_qubit}.pulses.pi.gaussian_amp"),
+
+            # Cosine flat-top pi pulse (used when pulse_shape == "flattop")
             'q_pi_flattop_ramp': getp(params, f"{active_qubit}.pulses.pi.flattop_ramp"),
             'q_pi_flattop_length': getp(params, f"{active_qubit}.pulses.pi.flattop_length"),
             'q_pi_flattop_gain': getp(params, f"{active_qubit}.pulses.pi.flattop_gain"),
@@ -84,6 +91,9 @@ class QickConfig(QBoardConfig):
             'q_gain_steps': getp(params, f"{active_qubit}.scripts.power_rabi.steps"),
             'amprabi_flattop_ramp': getp(params, f"{active_qubit}.scripts.power_rabi.flattop_ramp"),
             'amprabi_flattop_length': getp(params, f"{active_qubit}.scripts.power_rabi.flattop_length"),
+            # Gaussian amplitude-Rabi pulse; by default uses the pi pulse's sigma/nsigma.
+            'amprabi_gaussian_sigma': getp(params, f"{active_qubit}.pulses.pi.gaussian_sigma"),
+            'amprabi_gaussian_nsigma': getp(params, f"{active_qubit}.pulses.pi.gaussian_nsigma"),
 
             # Time Rabi
             'timerabi_q_pulse_len_loop_var': QickSweep1D("timerabi_q_pulse_lens_loop", getp(params, f"{active_qubit}.scripts.time_rabi.pulse_len_start"), getp(params, f"{active_qubit}.scripts.time_rabi.pulse_len_end")),
