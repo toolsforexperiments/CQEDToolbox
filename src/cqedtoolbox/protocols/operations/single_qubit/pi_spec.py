@@ -15,7 +15,8 @@ from labcore.measurement.record import record_as
 from labcore.data.datadict_storage import datadict_from_hdf5, load_as_xr
 
 from labcore.protocols.base import (ProtocolOperation, OperationStatus, serialize_fit_params,
-                                    CorrectionParameter, CheckResult, Correction, EvaluateResult)
+                                    CorrectionParameter, CheckResult, Correction, EvaluateResult,
+                                    PlatformTypes)
 from cqedtoolbox.protocols.parameters import (
     Repetition,
     PiSpecSteps,
@@ -29,7 +30,7 @@ from cqedtoolbox.protocols.parameters import (
     opx_check_qubit_window,
 )
 from cqedtoolbox.measurement_lib.opx.advanced.qubit_tuneup import measure_pi_spec
-from cqedtoolbox.measurement_lib.qick.single_transmon_v2 import PiSpecProgram
+from cqedtoolbox.measurement_lib.qick.single_transmon_v2 import PiSpecProgram, PI_SPEC_PULSE_FACTOR
 from cqedtoolbox.readout.qubit_readout import rotate_complex_qubit_data
 
 
@@ -177,7 +178,6 @@ class PiSpectroscopy(ProtocolOperation):
     _SIM_SIGMA = 3e6  # 3 MHz
     _SIM_AMP = 0.5
     _SIM_NOISE_AMP = 0.02
-    _PI_SPEC_PULSE_FACTOR = 10
 
     def __init__(self, params):
         super().__init__()
@@ -239,21 +239,10 @@ class PiSpectroscopy(ProtocolOperation):
 
     def _measure_qick(self) -> Path:
         logger.info("Starting qick pi spectroscopy measurement")
-
-        old_gain = self.qubit_gain()
-        old_length = self.pi_length()
-        try:
-            self.qubit_gain(old_gain / self._PI_SPEC_PULSE_FACTOR)
-            self.pi_length(old_length * self._PI_SPEC_PULSE_FACTOR)
-            sweep = PiSpecProgram()
-            logger.debug("Sweep created, running measurement")
-            loc, da = run_and_save_sweep(sweep, "data", self.name)
-        finally:
-            self.qubit_gain(old_gain)
-            self.pi_length(old_length)
-
+        sweep = PiSpecProgram()
+        logger.debug("Sweep created, running measurement")
+        loc, da = run_and_save_sweep(sweep, "data", self.name)
         logger.info("Measurement complete")
-
         return loc
 
     def _measure_opx(self) -> Path:
@@ -339,12 +328,28 @@ class PiSpectroscopy(ProtocolOperation):
             parts.append(f"high-error param: {bad_param}")
         return CheckResult("quality_check", passed, "; ".join(parts))
 
+    def _drive_pulse_report(self) -> str:
+        """Describe the spectroscopy drive actually played, if it differs from the pi pulse.
+
+        On QICK, PiSpecProgram plays the calibrated pi pulse stretched by
+        PI_SPEC_PULSE_FACTOR (sigma / plateau length) with the gain divided by the
+        same factor. The registered ``qubit_gain`` / ``pi_length`` inputs keep the
+        calibrated (unscaled) values, so report the scaled ones here.
+        """
+        if self.platform_type != PlatformTypes.QICK:
+            return ""
+        factor = PI_SPEC_PULSE_FACTOR
+        return (f"Drive pulse: calibrated pi pulse scaled ×{factor} in length, ÷{factor} in gain "
+                f"(pi_length {self.pi_length()} → {self.pi_length() * factor}, "
+                f"qubit_gain {self.qubit_gain()} → {self.qubit_gain() / factor})\n")
+
     def correct(self, result: EvaluateResult) -> EvaluateResult:
         figure = self.figure_paths[0].resolve() if self.figure_paths else None
         self.figure_paths.clear()
 
         header = (f"## Pi Spectroscopy\n"
                   f"Frequencies: {self.start_freq():.3f}–{self.end_freq():.3f} MHz\n"
+                  f"{self._drive_pulse_report()}"
                   f"Data Path: `{self.data_loc}`\n\n")
         self.report_output.append(header)
 

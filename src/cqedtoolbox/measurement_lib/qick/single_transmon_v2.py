@@ -15,6 +15,10 @@ For an example file using these functions, refer to
 
 logger = logging.getLogger(__name__)
 
+# Pi spectroscopy plays a longer, weaker version of the calibrated pi pulse
+# (lower power broadening, approx. same nominal area). See PiSpecProgram.
+PI_SPEC_PULSE_FACTOR = 10
+
 
 def get_pi_pulse_shape(cfg):
     """Return the configured pi-pulse shape, 'gaussian' or 'flattop'.
@@ -32,7 +36,8 @@ def get_pi_pulse_shape(cfg):
     return normalize_pi_pulse_shape(shape)
 
 
-def add_pi_envelope(prog, cfg, ch, prefix, label, key_prefix="q_pi", require_gain=True):
+def add_pi_envelope(prog, cfg, ch, prefix, label, key_prefix="q_pi", require_gain=True,
+                    length_scale=1):
     """Register the pi-pulse envelope on ``ch`` according to the configured shape.
 
     The shape always comes from ``cfg['q_pi_pulse_shape']``. Pulse settings are read
@@ -54,6 +59,9 @@ def add_pi_envelope(prog, cfg, ch, prefix, label, key_prefix="q_pi", require_gai
     :param label: Human-readable program name used in log and error messages.
     :param key_prefix: Prefix of the cfg keys holding the pulse settings.
     :param require_gain: Whether to require and return the calibrated gain.
+    :param length_scale: Factor applied to the scalable pulse length (gaussian sigma
+        or flat-top plateau length); the gain is divided by the same factor. The
+        flat-top ramps are not scaled. Defaults to 1 (no scaling).
     :return: ``(pulse_kwargs, gain)``. ``pulse_kwargs`` holds the shape-specific
         ``add_pulse`` arguments (``style``, ``envelope`` and, for flat-top, ``length``);
         ``gain`` is None when ``require_gain`` is False.
@@ -73,13 +81,19 @@ def add_pi_envelope(prog, cfg, ch, prefix, label, key_prefix="q_pi", require_gai
     if missing:
         raise ValueError(f"{label} ({shape} pi pulse) requires {', '.join(missing)}.")
 
+    if length_scale <= 0:
+        raise ValueError(f"{label}: length_scale must be positive, got {length_scale}.")
+
     gain = cfg[gain_key] if require_gain else None
+    if gain is not None and length_scale != 1:
+        gain /= length_scale
     gain_str = f"gain={gain}" if require_gain else "gain=swept"
 
     if shape == "gaussian":
         sigma = cfg[f"{key_prefix}_gaussian_sigma"]
         nsigma = cfg[f"{key_prefix}_gaussian_nsigma"]
         envelope = f"{prefix}_gauss"
+        sigma *= length_scale
         prog.add_gauss(ch=ch, name=envelope, sigma=sigma,
                        length=nsigma * sigma, even_length=True)
         logger.info(
@@ -93,6 +107,7 @@ def add_pi_envelope(prog, cfg, ch, prefix, label, key_prefix="q_pi", require_gai
     envelope = f"{prefix}_flattop_cosine"
     # QICK splits the cosine envelope into equal rising and falling ramps.
     prog.add_cosine(ch=ch, name=envelope, length=2 * ramp, even_length=True)
+    length *= length_scale
     logger.info(
         "%s: flat-top pi pulse (ramp=%s us per edge, flat=%s us, total=%s us, %s).",
         label, ramp, length, length + 2 * ramp, gain_str,
@@ -535,7 +550,9 @@ class PiSpecProgram(AveragerProgramV2):
         # Pump pulse definition
         self.add_loop("pi_spec_freqs_loop", self.cfg["pi_spec_freq_steps"])
         pi_kwargs, pi_gain = add_pi_envelope(
-            self, cfg, q_dac_ch, prefix="pi_spec", label="Pi spectroscopy")
+            self, cfg, q_dac_ch, prefix="pi_spec", label="Pi spectroscopy",
+            length_scale=PI_SPEC_PULSE_FACTOR,
+        )
         self.add_pulse(ch=q_dac_ch, name="pi_pulse",
                        **pi_kwargs,
                        freq=cfg['pi_spec_freq_loop_var'],  # Sweep variable
