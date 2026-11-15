@@ -26,6 +26,7 @@ from cqedtoolbox.protocols.parameters import (
     ReadoutLength,
     T1,
     Delay,
+    NEchos,
 )
 from cqedtoolbox.measurement_lib.opx.advanced.qubit_tuneup import measure_t1
 from cqedtoolbox.measurement_lib.qick.single_transmon_v2 import T1Program
@@ -279,9 +280,16 @@ class T1Operation(ProtocolOperation):
 
     def _measure_qick(self) -> Path:
         logger.info("Starting qick T1 measurement")
-        sweep = T1Program()
-        logger.debug("Sweep created, running measurement")
-        loc, da = run_and_save_sweep(sweep, "data", self.name)
+        # T1: no echo pulses; restore the previous value afterwards
+        n_echoes = NEchos(self.params)
+        previous_n_echoes = n_echoes()
+        n_echoes(0)
+        try:
+            sweep = T1Program()
+            logger.debug("Sweep created, running measurement")
+            loc, da = run_and_save_sweep(sweep, "data", self.name)
+        finally:
+            n_echoes(previous_n_echoes)
         logger.info("Measurement complete")
         return loc
 
