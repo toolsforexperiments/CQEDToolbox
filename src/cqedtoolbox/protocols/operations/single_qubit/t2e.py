@@ -137,6 +137,13 @@ class IncreaseAveragingCorrection(Correction):
 
 class T2EOperation(ProtocolOperation):
 
+    # Offset guesses smaller than this fraction of |A| are snapped to exactly 0.
+    # rotate_complex_qubit_data mean-centers the data (PCA), so the mean-based
+    # offset guess can be ~1e-16. lmfit's leastsq uses a relative finite-difference
+    # step, which is then too small to change the model: `of` never moves, the
+    # covariance is singular, and all stderrs come back None.
+    _OFFSET_SNAP_REL = 1e-8
+
     _SIM_T2E = 30.0
     _SIM_DETUNING = 0.05
     _SIM_AMP = 0.35 + 0.35j
@@ -233,7 +240,12 @@ class T2EOperation(ProtocolOperation):
     def _single_fit(self, delays, signal):
         """Fit one candidate. Returns (fit_result, fit_curve, residuals, sse)."""
         fit = ExponentiallyDecayingSine(delays, signal)
-        fit_result = fit.run(fit)
+        guess = fit.guess(delays, signal)
+        overrides = {}
+        if abs(guess["of"]) < self._OFFSET_SNAP_REL * abs(guess["A"]):
+            logger.debug(f"Snapping offset guess {guess['of']:.3g} to 0 (A guess {guess['A']:.3g})")
+            overrides["of"] = 0.0
+        fit_result = fit.run(params=overrides)
         fit_curve = fit_result.eval()
         residuals = signal - fit_curve
         sse = float(np.sum(np.abs(residuals) ** 2))
