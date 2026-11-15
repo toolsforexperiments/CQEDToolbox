@@ -336,7 +336,7 @@ class PowerRabi(ProtocolOperation):
     # offset guess can be ~1e-16. lmfit's leastsq uses a relative finite-difference
     # step, which is then too small to change the model: `of` never moves, the
     # covariance is singular, and all stderrs come back None.
-    _OFFSET_SNAP_REL = 1e-8
+    _OFFSET_SNAP_REL = 1e-4
 
     _SIM_PI_AMP = 0.5
     _SIM_NOISE_AMP = 0.05
