@@ -26,6 +26,7 @@ from cqedtoolbox.protocols.parameters import (
     ReadoutGain,
     ReadoutLength,
     T2R,
+    NEchos,
 )
 from cqedtoolbox.measurement_lib.opx.advanced.qubit_tuneup import measure_t2
 from cqedtoolbox.measurement_lib.qick.single_transmon_v2 import T2RProgram
@@ -213,9 +214,16 @@ class T2ROperation(ProtocolOperation):
 
     def _measure_qick(self) -> Path:
         logger.info("Starting qick T2 Ramsey measurement")
-        sweep = T2RProgram()
-        logger.debug("Sweep created, running measurement")
-        loc, da = run_and_save_sweep(sweep, "data", self.name)
+        # T2 Ramsey: no echo pulses; restore the previous value afterwards
+        n_echoes = NEchos(self.params)
+        previous_n_echoes = n_echoes()
+        n_echoes(0)
+        try:
+            sweep = T2RProgram()
+            logger.debug("Sweep created, running measurement")
+            loc, da = run_and_save_sweep(sweep, "data", self.name)
+        finally:
+            n_echoes(previous_n_echoes)
         logger.info("Measurement complete")
         return loc
 
