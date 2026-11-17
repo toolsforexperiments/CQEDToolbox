@@ -412,6 +412,16 @@ class IncreaseAveragingCorrection(Correction):
     def report_output(self) -> str:
         return self._last_change
 
+    # TODO: Move correction restoration and terminal cleanup into labcore's
+    # correction lifecycle, including cleanup when an attempt raises or is
+    # interrupted (currently restore() only runs from correct()).
+    def restore(self) -> None:
+        if self._original_reps is not None:
+            self.reps_param(self._original_reps)
+        self._original_reps = None
+        self._count = 0
+        self._last_change = ""
+
 
 class IncreaseSamplingRateCorrection(Correction):
     name = "increase_sampling_rate"
@@ -822,5 +832,8 @@ class SaturationSpectroscopy(ProtocolOperation):
 
         # Let super() add the check table; no auto-figure since figure_paths is cleared
         result = super().correct(result)
+
+        if result.status in (OperationStatus.SUCCESS, OperationStatus.FAILURE):
+            self._increase_averaging.restore()
 
         return result

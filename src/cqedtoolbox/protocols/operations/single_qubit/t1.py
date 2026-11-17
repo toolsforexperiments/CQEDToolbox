@@ -15,7 +15,7 @@ from labcore.measurement.record import record_as
 from labcore.data.datadict_storage import datadict_from_hdf5, load_as_xr
 
 from labcore.protocols.base import (
-    ProtocolOperation, serialize_fit_params,
+    ProtocolOperation, OperationStatus, serialize_fit_params,
     CorrectionParameter, CheckResult, Correction, EvaluateResult, PlatformTypes
 )
 from cqedtoolbox.protocols.parameters import (
@@ -26,6 +26,7 @@ from cqedtoolbox.protocols.parameters import (
     ReadoutLength,
     T1,
     Delay,
+    NEchos,
 )
 from cqedtoolbox.measurement_lib.opx.advanced.qubit_tuneup import measure_t1
 from cqedtoolbox.measurement_lib.qick.single_transmon_v2 import T1Program
@@ -188,6 +189,16 @@ class IncreaseAveragingCorrection(Correction):
     def report_output(self) -> str:
         return self._last_change
 
+    # TODO: Move correction restoration and terminal cleanup into labcore's
+    # correction lifecycle, including cleanup when an attempt raises or is
+    # interrupted (currently restore() only runs from correct()).
+    def restore(self) -> None:
+        if self._original_reps is not None:
+            self.reps_param(self._original_reps)
+        self._original_reps = None
+        self._count = 0
+        self._last_change = ""
+
 
 # ---------------------------------------------------------------------------
 # Operation
@@ -269,9 +280,16 @@ class T1Operation(ProtocolOperation):
 
     def _measure_qick(self) -> Path:
         logger.info("Starting qick T1 measurement")
-        sweep = T1Program()
-        logger.debug("Sweep created, running measurement")
-        loc, da = run_and_save_sweep(sweep, "data", self.name)
+        # T1: no echo pulses; restore the previous value afterwards
+        n_echoes = NEchos(self.params)
+        previous_n_echoes = n_echoes()
+        n_echoes(0)
+        try:
+            sweep = T1Program()
+            logger.debug("Sweep created, running measurement")
+            loc, da = run_and_save_sweep(sweep, "data", self.name)
+        finally:
+            n_echoes(previous_n_echoes)
         logger.info("Measurement complete")
         return loc
 
@@ -373,4 +391,6 @@ class T1Operation(ProtocolOperation):
         )
 
         result = super().correct(result)  # adds check table + success update lines
+        if result.status in (OperationStatus.SUCCESS, OperationStatus.FAILURE):
+            self._increase_averaging.restore()
         return result

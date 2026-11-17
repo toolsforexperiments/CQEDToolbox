@@ -8,9 +8,34 @@ import logging
 from dataclasses import dataclass, field
 from labcore.protocols.base import ProtocolParameterBase
 from instrumentserver.helpers import nestedAttributeFromString
+from cqedtoolbox.measurement_lib.qick.pulse_shapes import normalize_pi_pulse_shape
 
 
 logger = logging.getLogger(__name__)
+
+
+def _qick_pi_pulse_shape(params) -> tuple[str, str]:
+    """Return the active qubit and its selected QICK pi-pulse shape.
+
+    A missing shape falls back to the default silently; the warning is logged
+    once per program build in ``single_transmon_v2.get_pi_pulse_shape``.
+    """
+    active_qubit = nestedAttributeFromString(params, "active.qubit")()
+    try:
+        shape = nestedAttributeFromString(
+            params, f"{active_qubit}.pulses.pi.pulse_shape"
+        )()
+    except AttributeError:
+        shape = None
+    return active_qubit, normalize_pi_pulse_shape(shape)
+
+
+def _qick_pi_parameter(params, gaussian: str, flattop: str):
+    """Return the shape-specific parameter for the active QICK pi pulse."""
+    active_qubit, shape = _qick_pi_pulse_shape(params)
+    name = gaussian if shape == "gaussian" else flattop
+    return nestedAttributeFromString(params, f"{active_qubit}.pulses.pi.{name}")
+
 
 # Allowed IF range of the OPX. When a new center frequency (or window) does not fit inside it,
 # the LO is moved so that the center sits in the middle of the range.
@@ -225,6 +250,42 @@ class ReadoutLength(ProtocolParameterBase):
         q = nestedAttributeFromString(self.params, "active.qubit")()
         readout_pulse = nestedAttributeFromString(self.params, "opx.readout_pulse")()
         return nestedAttributeFromString(self.params, f"{q}.readout.{readout_pulse}.len")(value)
+
+@dataclass
+class PiLength(ProtocolParameterBase):
+    name: str = field(default="pi_length", init=False)
+    description: str = field(default="Length of plateau for flattop pulses, sigma for gaussian pulses", init=False)
+
+    # TODO: PiLength is the shape-specific scalable length parameter; it is not
+    # the exact pulse length.
+
+    def _dummy_getter(self):
+        raise NotImplementedError
+
+    def _dummy_setter(self, value):
+        raise NotImplementedError
+
+    def _qick_getter(self):
+        return _qick_pi_parameter(
+            self.params,
+            gaussian="gaussian_sigma",
+            flattop="flattop_length",
+        )()
+
+    def _qick_setter(self, value):
+        return _qick_pi_parameter(
+            self.params,
+            gaussian="gaussian_sigma",
+            flattop="flattop_length",
+        )(value)
+
+    def _opx_getter(self):
+        q = nestedAttributeFromString(self.params, "active.qubit")()
+        return nestedAttributeFromString(self.params, f"{q}.pulses.pi.len")()
+
+    def _opx_setter(self, value):
+        q = nestedAttributeFromString(self.params, "active.qubit")()
+        return nestedAttributeFromString(self.params, f"{q}.pulses.pi.len")(value)
 
 
 @dataclass
@@ -881,12 +942,18 @@ class QubitGain(ProtocolParameterBase):
         return nestedAttributeFromString(self.params, f"{active_qubit}.pulses.pi.amp")(value)
 
     def _qick_getter(self):
-        active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
-        return nestedAttributeFromString(self.params, f"{active_qubit}.pulses.pi.flattop_gain")()
+        return _qick_pi_parameter(
+            self.params,
+            gaussian="gaussian_amp",
+            flattop="flattop_gain",
+        )()
 
     def _qick_setter(self, value):
-        active_qubit = nestedAttributeFromString(self.params, "active.qubit")()
-        return nestedAttributeFromString(self.params, f"{active_qubit}.pulses.pi.flattop_gain")(value)
+        return _qick_pi_parameter(
+            self.params,
+            gaussian="gaussian_amp",
+            flattop="flattop_gain",
+        )(value)
 
     def _opx_getter(self):
         q = nestedAttributeFromString(self.params, "active.qubit")()

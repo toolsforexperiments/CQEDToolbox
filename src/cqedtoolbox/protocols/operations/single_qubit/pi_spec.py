@@ -15,7 +15,8 @@ from labcore.measurement.record import record_as
 from labcore.data.datadict_storage import datadict_from_hdf5, load_as_xr
 
 from labcore.protocols.base import (ProtocolOperation, OperationStatus, serialize_fit_params,
-                                    CorrectionParameter, CheckResult, Correction, EvaluateResult)
+                                    CorrectionParameter, CheckResult, Correction, EvaluateResult,
+                                    PlatformTypes)
 from cqedtoolbox.protocols.parameters import (
     Repetition,
     PiSpecSteps,
@@ -25,10 +26,11 @@ from cqedtoolbox.protocols.parameters import (
     QubitGain,
     ReadoutGain,
     ReadoutLength,
+    PiLength,
     opx_check_qubit_window,
 )
 from cqedtoolbox.measurement_lib.opx.advanced.qubit_tuneup import measure_pi_spec
-from cqedtoolbox.measurement_lib.qick.single_transmon_v2 import PiSpecProgram
+from cqedtoolbox.measurement_lib.qick.single_transmon_v2 import PiSpecProgram, PI_SPEC_PULSE_FACTOR
 from cqedtoolbox.readout.qubit_readout import rotate_complex_qubit_data
 
 
@@ -140,6 +142,7 @@ class IncreaseAveragingCorrection(Correction):
         self.reps_param = reps_param
         self.factor_param = factor_param
         self.max_increases_param = max_increases_param
+        self._original_reps: int | None = None
         self._count = 0
         self._last_change = ""
 
@@ -147,14 +150,26 @@ class IncreaseAveragingCorrection(Correction):
         return self._count < int(self.max_increases_param())
 
     def apply(self) -> None:
-        old = self.reps_param()
-        new = int(old * self.factor_param())
+        if self._original_reps is None:
+            self._original_reps = int(self.reps_param())
+        old = int(self.reps_param())
+        new = int(self._original_reps * (self.factor_param() ** (self._count + 1)))
         self.reps_param(new)
         self._count += 1
         self._last_change = f"{old} → {new} reps"
 
     def report_output(self) -> str:
         return self._last_change
+
+    # TODO: Move correction restoration and terminal cleanup into labcore's
+    # correction lifecycle, including cleanup when an attempt raises or is
+    # interrupted (currently restore() only runs from correct()).
+    def restore(self) -> None:
+        if self._original_reps is not None:
+            self.reps_param(self._original_reps)
+        self._original_reps = None
+        self._count = 0
+        self._last_change = ""
 
 
 class PiSpectroscopy(ProtocolOperation):
@@ -174,6 +189,7 @@ class PiSpectroscopy(ProtocolOperation):
             start_freq=StartPiSpecFrequency(params),
             end_freq=EndPiSpecFrequency(params),
             qubit_gain=QubitGain(params),
+            pi_length=PiLength(params),
             readout_gain=ReadoutGain(params),
             readout_length=ReadoutLength(params)
         )
@@ -223,12 +239,10 @@ class PiSpectroscopy(ProtocolOperation):
 
     def _measure_qick(self) -> Path:
         logger.info("Starting qick pi spectroscopy measurement")
-
         sweep = PiSpecProgram()
         logger.debug("Sweep created, running measurement")
         loc, da = run_and_save_sweep(sweep, "data", self.name)
         logger.info("Measurement complete")
-
         return loc
 
     def _measure_opx(self) -> Path:
@@ -314,16 +328,35 @@ class PiSpectroscopy(ProtocolOperation):
             parts.append(f"high-error param: {bad_param}")
         return CheckResult("quality_check", passed, "; ".join(parts))
 
+    def _drive_pulse_report(self) -> str:
+        """Describe the spectroscopy drive actually played, if it differs from the pi pulse.
+
+        On QICK, PiSpecProgram plays the calibrated pi pulse stretched by
+        PI_SPEC_PULSE_FACTOR (sigma / plateau length) with the gain divided by the
+        same factor. The registered ``qubit_gain`` / ``pi_length`` inputs keep the
+        calibrated (unscaled) values, so report the scaled ones here.
+        """
+        if self.platform_type != PlatformTypes.QICK:
+            return ""
+        factor = PI_SPEC_PULSE_FACTOR
+        return (f"Drive pulse: calibrated pi pulse scaled ×{factor} in length, ÷{factor} in gain "
+                f"(pi_length {self.pi_length()} → {self.pi_length() * factor}, "
+                f"qubit_gain {self.qubit_gain()} → {self.qubit_gain() / factor})\n")
+
     def correct(self, result: EvaluateResult) -> EvaluateResult:
         figure = self.figure_paths[0].resolve() if self.figure_paths else None
         self.figure_paths.clear()
 
         header = (f"## Pi Spectroscopy\n"
                   f"Frequencies: {self.start_freq():.3f}–{self.end_freq():.3f} MHz\n"
+                  f"{self._drive_pulse_report()}"
                   f"Data Path: `{self.data_loc}`\n\n")
         self.report_output.append(header)
 
         result = super().correct(result)  # adds check table; no auto-figure since list is empty
+
+        if result.status in (OperationStatus.SUCCESS, OperationStatus.FAILURE):
+            self._increase_averaging.restore()
 
         status_line = "SUCCESSFUL" if result.status == OperationStatus.SUCCESS else "UNSUCCESSFUL"
         self.report_output.extend([

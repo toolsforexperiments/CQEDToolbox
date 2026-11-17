@@ -17,8 +17,8 @@ from labcore.measurement.storage import run_and_save_sweep
 from labcore.data.datadict_storage import datadict_from_hdf5, load_as_xr
 from labcore.measurement import sweep_parameter, record_as
 
-from labcore.protocols.base import (ProtocolOperation, serialize_fit_params, CorrectionParameter,
-                                    CheckResult, Correction)
+from labcore.protocols.base import (ProtocolOperation, OperationStatus, serialize_fit_params,
+                                    CorrectionParameter, CheckResult, Correction, EvaluateResult)
 from cqedtoolbox.protocols.operations import ResonatorGeometry
 from cqedtoolbox.protocols.parameters import (Repetition,
                                               ResonatorSpecSteps, ReadoutGain, ReadoutLength, StartReadoutFrequency,
@@ -357,7 +357,17 @@ class IncreaseAveragingCorrection(Correction):
 
     def report_output(self) -> str:
         return self._last_change
-    
+
+    # TODO: Move correction restoration and terminal cleanup into labcore's
+    # correction lifecycle, including cleanup when an attempt raises or is
+    # interrupted (currently restore() only runs from correct()).
+    def restore(self) -> None:
+        if self._original_reps is not None:
+            self.reps_param(self._original_reps)
+        self._original_reps = None
+        self._count = 0
+        self._last_change = ""
+
 
 def fit_sine(t, data):
     """Fit a sine wave to the given data."""
@@ -801,3 +811,9 @@ class ResonatorSpectroscopy(ProtocolOperation):
             passed,
             f"f_0={f0:.6g}, sweep=[{fmin:.6g}, {fmax:.6g}]",
         )
+
+    def correct(self, result: EvaluateResult) -> EvaluateResult:
+        result = super().correct(result)
+        if result.status in (OperationStatus.SUCCESS, OperationStatus.FAILURE):
+            self._increase_averaging.restore()
+        return result

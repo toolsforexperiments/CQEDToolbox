@@ -15,7 +15,7 @@ from labcore.measurement.record import record_as
 from labcore.data.datadict_storage import datadict_from_hdf5, load_as_xr
 
 from labcore.protocols.base import (
-    ProtocolOperation, serialize_fit_params,
+    ProtocolOperation, OperationStatus, serialize_fit_params,
     CorrectionParameter, CheckResult, Correction, EvaluateResult, PlatformTypes
 )
 from cqedtoolbox.protocols.parameters import (
@@ -26,6 +26,7 @@ from cqedtoolbox.protocols.parameters import (
     ReadoutGain,
     ReadoutLength,
     T2R,
+    NEchos,
 )
 from cqedtoolbox.measurement_lib.opx.advanced.qubit_tuneup import measure_t2
 from cqedtoolbox.measurement_lib.qick.single_transmon_v2 import T2RProgram
@@ -124,12 +125,29 @@ class IncreaseAveragingCorrection(Correction):
     def report_output(self) -> str:
         return self._last_change
 
+    # TODO: Move correction restoration and terminal cleanup into labcore's
+    # correction lifecycle, including cleanup when an attempt raises or is
+    # interrupted (currently restore() only runs from correct()).
+    def restore(self) -> None:
+        if self._original_reps is not None:
+            self.reps_param(self._original_reps)
+        self._original_reps = None
+        self._count = 0
+        self._last_change = ""
+
 
 # ---------------------------------------------------------------------------
 # Operation
 # ---------------------------------------------------------------------------
 
 class T2ROperation(ProtocolOperation):
+
+    # Offset guesses smaller than this fraction of |A| are snapped to exactly 0.
+    # rotate_complex_qubit_data mean-centers the data (PCA), so the mean-based
+    # offset guess can be ~1e-16. lmfit's leastsq uses a relative finite-difference
+    # step, which is then too small to change the model: `of` never moves, the
+    # covariance is singular, and all stderrs come back None.
+    _OFFSET_SNAP_REL = 1e-4
 
     _SIM_T2R = 10.0
     _SIM_DETUNING = 0.05
@@ -176,6 +194,7 @@ class T2ROperation(ProtocolOperation):
         self.fit_result = None
         self.residuals = None
         self.snr = None
+        self.fit_inverted = False
 
     def _measure_dummy(self) -> Path:
         logger.info("Starting dummy T2 Ramsey measurement")
@@ -195,9 +214,16 @@ class T2ROperation(ProtocolOperation):
 
     def _measure_qick(self) -> Path:
         logger.info("Starting qick T2 Ramsey measurement")
-        sweep = T2RProgram()
-        logger.debug("Sweep created, running measurement")
-        loc, da = run_and_save_sweep(sweep, "data", self.name)
+        # T2 Ramsey: no echo pulses; restore the previous value afterwards
+        n_echoes = NEchos(self.params)
+        previous_n_echoes = n_echoes()
+        n_echoes(0)
+        try:
+            sweep = T2RProgram()
+            logger.debug("Sweep created, running measurement")
+            loc, da = run_and_save_sweep(sweep, "data", self.name)
+        finally:
+            n_echoes(previous_n_echoes)
         logger.info("Measurement complete")
         return loc
 
@@ -221,23 +247,56 @@ class T2ROperation(ProtocolOperation):
         self.independents["delays"] = data["delay"].values
         self.dependents["signal"] = data["signal"].values
 
-    def _fit_exponentially_decaying_sine(self, delays, signal, fig_title="") -> tuple:
+    def _single_fit(self, delays, signal):
+        """Fit one candidate. Returns (fit_result, fit_curve, residuals, sse)."""
         fit = ExponentiallyDecayingSine(delays, signal)
-        fit_result = fit.run(fit)
+        guess = fit.guess(delays, signal)
+        overrides = {}
+        if abs(guess["of"]) < self._OFFSET_SNAP_REL * abs(guess["A"]):
+            logger.debug(f"Snapping offset guess {guess['of']:.3g} to 0 (A guess {guess['A']:.3g})")
+            overrides["of"] = 0.0
+        fit_result = fit.run(params=overrides)
         fit_curve = fit_result.eval()
         residuals = signal - fit_curve
+        sse = float(np.sum(np.abs(residuals) ** 2))
+        return fit_result, fit_curve, residuals, sse
+
+    def _fit_exponentially_decaying_sine(self, delays, signal, fig_title="") -> tuple:
+        # Fit both data and -data; keep whichever agrees best with the data it was fit to.
+        signal = np.asarray(signal)
+        candidates = {}
+        errors = {}
+        for inverted, s in ((False, signal), (True, -signal)):
+            label = "-data" if inverted else "data"
+            try:
+                candidates[inverted] = (s, *self._single_fit(delays, s))
+            except Exception as e:
+                errors[inverted] = e
+                logger.warning(f"{label} fit raised an error: {e!r}")
+                continue
+            logger.info(f"{label} fit: SSE={candidates[inverted][4]:.4g}")
+
+        if not candidates:
+            raise RuntimeError(
+                f"Fit failed for both data and -data: data: {errors[False]!r}; -data: {errors[True]!r}"
+            ) from errors[False]
+
+        inverted = min(candidates, key=lambda k: candidates[k][4])
+        fit_signal, fit_result, fit_curve, residuals, _ = candidates[inverted]
+        self.fit_inverted = inverted
+
         amp = fit_result.params["A"].value
         noise = np.std(residuals)
         snr = np.abs(amp / (4 * noise))
 
         fig, ax = plt.subplots()
-        ax.set_title(fig_title)
+        ax.set_title(fig_title + (" (inverted data)" if inverted else ""))
         if self.platform_type == PlatformTypes.OPX:
             ax.set_xlabel("Delay (ns)")
         else:
             ax.set_xlabel("Delay (μs)")
-        ax.set_ylabel("Rotated Signal (A.U)")
-        ax.plot(delays, signal, label="Data")
+        ax.set_ylabel("Rotated Signal (A.U)" + (" × -1" if inverted else ""))
+        ax.plot(delays, fit_signal, label="Data")
         ax.plot(delays, fit_curve, label="Fit")
         ax.legend()
 
@@ -255,7 +314,8 @@ class T2ROperation(ProtocolOperation):
             ds.add(
                 fit_result=self.fit_result,
                 params=serialize_fit_params(self.fit_result.params),
-                snr=float(self.snr)
+                snr=float(self.snr),
+                fit_inverted=bool(self.fit_inverted),
             )
 
             ds.add_figure(self.name, fig=fig)
@@ -294,9 +354,11 @@ class T2ROperation(ProtocolOperation):
         if figure:
             self.report_output.append(figure)
         self.report_output.append(
-            f"SNR={self.snr:.3f}\n\n"
+            f"SNR={self.snr:.3f}, fit on {'-data' if self.fit_inverted else 'data'}\n\n"
             f"**Fit Report:**\n```\n{str(self.fit_result.lmfit_result.fit_report())}\n```\n\n"
         )
 
         result = super().correct(result)  # adds check table + success update line
+        if result.status in (OperationStatus.SUCCESS, OperationStatus.FAILURE):
+            self._increase_averaging.restore()
         return result

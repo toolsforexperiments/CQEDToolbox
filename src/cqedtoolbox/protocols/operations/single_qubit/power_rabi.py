@@ -14,7 +14,7 @@ from labcore.measurement import sweep_parameter, record_as
 from labcore.data.datadict_storage import datadict_from_hdf5, load_as_xr
 
 from labcore.protocols.base import (
-    ProtocolOperation, serialize_fit_params,
+    ProtocolOperation, OperationStatus, serialize_fit_params,
     CorrectionParameter, CheckResult, Correction, EvaluateResult, PlatformTypes,
 )
 from cqedtoolbox.protocols.parameters import (
@@ -200,6 +200,16 @@ class IncreaseAveragingCorrection(Correction):
     def report_output(self) -> str:
         return self._last_change
 
+    # TODO: Move correction restoration and terminal cleanup into labcore's
+    # correction lifecycle, including cleanup when an attempt raises or is
+    # interrupted (currently restore() only runs from correct()).
+    def restore(self) -> None:
+        if self._original_reps is not None:
+            self.reps_param(self._original_reps)
+        self._original_reps = None
+        self._count = 0
+        self._last_change = ""
+
 
 class IncreaseStepsCorrection(Correction):
     name = "increase_steps"
@@ -320,6 +330,13 @@ class SyntheticPowerRabiData:
 # ---------------------------------------------------------------------------
 
 class PowerRabi(ProtocolOperation):
+
+    # Offset guesses smaller than this fraction of |A| are snapped to exactly 0.
+    # rotate_complex_qubit_data mean-centers the data (PCA), so the mean-based
+    # offset guess can be ~1e-16. lmfit's leastsq uses a relative finite-difference
+    # step, which is then too small to change the model: `of` never moves, the
+    # covariance is singular, and all stderrs come back None.
+    _OFFSET_SNAP_REL = 1e-4
 
     _SIM_PI_AMP = 0.5
     _SIM_NOISE_AMP = 0.05
@@ -457,7 +474,12 @@ class PowerRabi(ProtocolOperation):
 
     def _fit_cosine(self, gains, signal, fig_title="") -> tuple:
         fit = Cosine(gains, signal)
-        fit_result = fit.run(fit)
+        guess = fit.guess(gains, signal)
+        overrides = {}
+        if abs(guess["of"]) < self._OFFSET_SNAP_REL * abs(guess["A"]):
+            logger.debug(f"Snapping offset guess {guess['of']:.3g} to 0 (A guess {guess['A']:.3g})")
+            overrides["of"] = 0.0
+        fit_result = fit.run(params=overrides)
         fit_curve = fit_result.eval()
         residuals = signal - fit_curve
         amp = fit_result.params["A"].value
@@ -532,4 +554,6 @@ class PowerRabi(ProtocolOperation):
         )
 
         result = super().correct(result)   # adds check table + success update line
+        if result.status in (OperationStatus.SUCCESS, OperationStatus.FAILURE):
+            self._increase_averaging.restore()
         return result
